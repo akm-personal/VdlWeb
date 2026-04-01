@@ -1,0 +1,102 @@
+.student-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.student-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.student-header h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-weight: 500;
+  font-size: 1.5rem;
+}
+
+.btn-show-all {
+  background-color: var(--primary-color);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 400;
+  transition: background-color 0.3s;
+}
+
+.btn-show-all:hover {
+  background-color: var(--primary-hover);
+}
+
+.student-form-container,
+.student-list-container {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-md);
+}
+
+.student-form, .edit-student-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  gap: 15px;
+}
+
+/* Status Badges */
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-block;
+  text-align: center;
+}
+
+.status-badge.due, .status-badge.pending, .status-badge.inactive { background-color: var(--danger-color); }
+.status-badge.done, .status-badge.fully-booked, .status-badge.paid, .status-badge.active { background-color: var(--success-color); }
+.status-badge.upcoming, .status-badge.partially-booked { background-color: var(--warning-color); color: #333; }
+
+.student-details-grid p { margin: 10px 0; font-size: 14px; color: var(--text-main); border-bottom: 1px dashed #eee; padding-bottom: 8px; }
+.student-details-grid p:last-child { border-bottom: none; }
+
+/* Responsive Breakpoints */
+@media (max-width: 768px) {
+  .student-form, .edit-student-form {
+    grid-template-columns: 1fr;
+  }
+  .student-form-container {
+    padding: 20px;
+  }
+}

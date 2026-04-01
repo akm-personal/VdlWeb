@@ -1,0 +1,280 @@
+/* Basic styles for login form */
+#container-parent {
+  background: linear-gradient(135deg, #f1c40f 0%, #a27f4be6 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.container {
+  background-color: #fff;
+  border-radius: 30px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+  width: 650px;
+  max-width: 100%;
+  min-height: 400px;
+}
+
+.form-container {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  transition: all 0.6s ease-in-out;
+}
+
+.sign-in {
+  left: 0;
+  width: 50%;
+  z-index: 2;
+}
+
+form {
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 0 30px;
+  height: 100%;
+}
+
+h1 {
+  font-size: 1.8rem;
+  margin: 0;
+  margin-bottom: 15px;
+}
+
+.social-icons {
+  margin: 20px 0;
+}
+
+.social-icons button {
+  border: 1px solid #ccc;
+  border-radius: 20%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 3px;
+  width: 32px;
+  height: 32px;
+  background: none;
+  color: #333;
+  cursor: pointer;
+}
+
+.forgot-btn {
+  background: none;
+  border: none;
+  color: #333;
+  font-size: 12px;
+  text-decoration: none;
+  margin: 10px 0 8px;
+  cursor: pointer;
+}
+
+span {
+  font-size: 14px;
+  /* color: #666; */
+  margin-bottom: 15px;
+}
+
+input {
+  background-color: #eee;
+  border: none;
+  margin: 6px 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  width: 100%;
+  outline: none;
+}
+
+button {
+  background-color: #d44f4e;
+  color: #fff;
+  font-size: 11px;
+  padding: 8px 35px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  /* text-transform: uppercase; */
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #bd9a47;
+}
+
+a {
+  color: #333;
+  font-size: 12px;
+  text-decoration: none;
+  margin: 10px 0 8px;
+}
+
+.toggle-container {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  transition: all 0.6s ease-in-out;
+  border-radius: 150px 0 0 100px;
+  z-index: 1000;
+}
+
+.toggle {
+  background-color: #512da8;
+  height: 100%;
+  background: linear-gradient(to right, #5c6bc0, #e74c3c);
+  color: #fff;
+  position: relative;
+  left: -100%;
+  height: 100%;
+  width: 200%;
+  transform: translateX(0);
+  transition: all 0.6s ease-in-out;
+}
+
+.toggle-panel {
+  position: absolute;
+  width: 50%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 0 20px;
+  text-align: center;
+  top: 0;
+  transform: translateX(0);
+  transition: all 0.6s ease-in-out;
+}
+
+.toggle-left {
+  transform: translateX(-200%);
+}
+
+.toggle-right {
+  right: 0;
+  transform: translateX(0);
+}
+
+.error {
+  color: red;
+  font-size: 11px;
+  margin-top: 10px;
+}
+
+/* Responsive styles for mobile devices */
+@media (max-width: 768px) {
+  #container-parent {
+    padding: 10px;
+    min-height: 100vh; /* Ensure it takes full viewport height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Ensure background is applied from the parent */
+    background: linear-gradient(135deg, #f1c40f 0%, #a27f4be6 100%);
+  }
+
+  .container {
+    flex-direction: column; /* Stack form and toggle vertically */
+    width: 100%;
+    max-width: 400px; /* Limit overall width on mobile for better aesthetics */
+    min-height: auto; /* Allow height to adjust */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35); /* Keep original shadow or adjust */
+    border-radius: 10px; /* Adjust border-radius for mobile */
+    overflow: hidden; /* Ensure content stays within bounds */
+  }
+
+  .form-container.sign-in { /* Target the sign-in form specifically */
+    position: static; /* Remove absolute positioning */
+    width: 100%;
+    padding: 20px;
+    z-index: auto;
+    background-color: #fff; /* Ensure form has a background */
+    border-radius: 10px 10px 0 0; /* Rounded top corners */
+  }
+
+  .toggle-container {
+    position: static; /* Remove absolute positioning */
+    width: 100%;
+    order: 1; /* Place toggle below the form */
+    transform: none; /* Remove any transforms */
+    height: auto; /* Adjust height */
+    border-radius: 0 0 10px 10px; /* Rounded bottom corners */
+    /* Override Auth.css display: none */
+    display: block !important;
+  }
+
+  .toggle {
+    flex-direction: column; /* Stack toggle panels if they are flex items */
+    height: auto;
+    /* Use a solid color for mobile toggle background for simplicity, matching button color */
+    background: #d44f4e; /* From loginfromstyle.css button */
+    border-radius: 0 0 10px 10px; /* Ensure rounded corners for toggle */
+  }
+
+  .toggle-panel {
+    width: 100%;
+    padding: 20px;
+    text-align: center;
+    position: static; /* Remove absolute positioning */
+    transform: none; /* Remove any transforms */
+    opacity: 1; /* Ensure visibility */
+    z-index: auto;
+  }
+
+  /* For the Login page, the toggle-left panel is for switching to login (redundant here) */
+  .toggle-panel.toggle-left {
+    display: none; /* Hide the redundant "Login" prompt on the login page */
+  }
+
+  /* The toggle-right panel is for switching to register */
+  .toggle-panel.toggle-right {
+    display: block; /* Ensure the "Register" prompt is visible */
+    background-color: transparent; /* Let the parent .toggle define the background */
+    color: white;
+  }
+  .toggle-panel.toggle-right {
+    text-align: center; /* Center the content on the right panel */
+  }
+
+
+  .toggle-panel h1 {
+    font-size: 1.2rem; /* Adjust font size for mobile */
+    margin-bottom: 10px;
+  }
+
+  .toggle-panel p {
+    font-size: 0.9rem; /* Adjust font size for mobile */
+    line-height: 1.3;
+    margin-bottom: 15px;
+  }
+
+  .toggle-panel button.hidden {
+    background-color: white;
+    color: #d44f4e; /* Match the toggle background */
+    border: 1px solid white;
+    padding: 10px 30px; /* Adjust padding */
+    font-size: 12px; /* Adjust font size */
+  }
+
+  /* Adjust input and button styles within the form */
+  .form-container input,
+  .form-container button {
+    width: 100%; /* Full width for inputs and buttons */
+    box-sizing: border-box; /* Include padding in width */
+  }
+
+  .form-container h1 {
+    font-size: 1.5rem; /* Adjust heading size */
+  }
+}

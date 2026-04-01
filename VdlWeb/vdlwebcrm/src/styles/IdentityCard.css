@@ -1,0 +1,158 @@
+/* identityCard.css */
+
+.identity-card-page-container {
+    padding: 20px;
+    background-color: #f0f2f5; /* Light background for the page */
+    min-height: calc(100vh - 120px); /* Adjust based on navbar/footer height */
+}
+
+.page-title {
+    text-align: center;
+    margin-bottom: 30px;
+    color: #333;
+    font-size: 2em;
+}
+
+.id-cards-grid {
+    display: grid; /* Changed minmax to match card width for better fitting */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 4-5 cards per row */
+    gap: 30px;
+    justify-content: center;
+    padding: 20px;
+}
+
+.no-cards-message {
+    grid-column: 1 / -1; /* Span across all columns */
+    text-align: center;
+    font-size: 1.2em;
+    color: #777;
+    margin-top: 50px;
+}
+
+/* Main Card Container with background stripes */
+.id-card {
+    width: 280px; /* Smaller width for 4-5 cards per row */
+    height: 400px; /* Adjusted height */
+    position: relative;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    /* Gradient to create the exact left dark area and right vertical stripes */
+    background: linear-gradient(to right,
+        #080a17 0%, #080a17 50%,    /* Dark Blue Left */
+        #ff4c00 50%, #ff4c00 74%,   /* Thick Orange */
+        #ffffff 74%, #ffffff 87%,   /* Thick White */
+        #ff4c00 87%, #ff4c00 91%,   /* Thin Orange */
+        #ffffff 91%, #ffffff 95%,   /* Thin White */
+        #ff4c00 95%, #ff4c00 100%   /* Edge Orange */
+    );
+    overflow: hidden;
+    margin: 0 auto; /* Center individual cards within their grid cell */
+}
+
+/* Profile Image Container with curved border */
+.photo-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 62%;
+    height: 55%;
+    border-bottom-right-radius: 120px; /* Adjusted radius */
+    border-bottom: 4px solid #ffffff; /* Adjusted border thickness */
+    border-right: 4px solid #ffffff; /* Adjusted border thickness */
+    background-size: cover;
+    background-position: center top;
+    box-sizing: border-box;
+    z-index: 2;
+}
+
+/* Details container on the bottom left */
+.details {
+    position: absolute;
+    bottom: -35px; /* Adjusted position */
+    left: 20px; /* Adjusted position */
+    color: #ffffff;
+    z-index: 3;
+}
+
+.name {
+    font-size: 22px; /* Smaller font size */
+    font-weight: 800;
+    margin: 0 0 6px 0; /* Adjusted margin */
+    letter-spacing: 0.5px;
+}
+
+.info-line {
+    font-size: 12px; /* Smaller font size */
+    margin: 0 0 3px 0; /* Adjusted margin */
+    color: #e0e0e0;
+}
+
+.info-line span.bold-text {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+/* Fake Barcode styling */
+.barcode-box {
+    background: #ffffff;
+    padding: 8px 12px;
+    margin-top: 20px;
+    width: 180px;
+    box-sizing: border-box;
+}
+
+.barcode-text {
+    color: #000000;
+    font-size: 9px;
+    text-align: center;
+    transform: rotate(180deg); /* This might be a typo, usually barcodes are not rotated */
+    margin-bottom: 5px;
+    letter-spacing: 2px;
+}
+
+.barcode-bars {
+    height: 35px;
+    width: 100%;
+    /* Repeating linear gradient to simulate barcode lines */
+    background-image: repeating-linear-gradient(to right,
+        #000 0, #000 3px,
+        #fff 3px, #fff 5px,
+        #000 5px, #000 7px,
+        #fff 7px, #fff 9px,
+        #000 9px, #000 13px,
+        #fff 13px, #fff 15px,
+        #000 15px, #000 18px,
+        #fff 18px, #fff 21px,
+        #000 21px, #000 24px,
+        #fff 24px, #fff 25px
+    );
+}
+
+/* Download Button Styling */
+.download-card-btn {
+    position: absolute;
+    top: -237px;
+    right: 129px;
+    background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+    border: none;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 1.2em;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.2s, transform 0.2s;
+    z-index: 10; /* Ensure it's above other card elements */
+}
+
+.download-card-btn:hover {
+    background-color: rgba(255, 255, 255, 1); /* Fully opaque on hover */
+    transform: scale(1.05);
+}
+
+.hide-for-download {
+    display: none !important;
+}

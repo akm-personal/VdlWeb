@@ -1,0 +1,21 @@
+.shift-page {
+  padding: 10px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.shift-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: bold;
+}
+.status-badge.fully-booked { background-color: #2ecc71; color: white; }
+.status-badge.locked { background-color: #e74c3c; color: white; }
