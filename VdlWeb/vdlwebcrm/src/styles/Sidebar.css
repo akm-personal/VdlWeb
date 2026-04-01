@@ -1,0 +1,101 @@
+.sidebar {
+  width: var(--sidebar-width);
+  background-color: var(--sidebar-bg);
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: fixed;
+  height: calc(100vh - var(--header-height));
+  left: 0;
+  top: var(--header-height);
+  z-index: 1040;
+  box-shadow: var(--shadow-lg);
+}
+
+.sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+.sidebar-header {
+  height: var(--header-height);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: 1px;
+  color: #fff;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 10px 0;
+  overflow-y: auto;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 4px 12px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.nav-link:hover, .nav-link.active {
+  background-color: var(--sidebar-hover);
+  color: #ffffff;
+  transform: translateX(4px);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-link .icon {
+  margin-right: 15px;
+  font-size: 1.2rem;
+  min-width: 24px;
+  text-align: center;
+}
+
+.sidebar.collapsed .sidebar-header { padding: 0; }
+.sidebar.collapsed .sidebar-header h2 { display: none; }
+.sidebar.collapsed .nav-link {
+  padding: 12px 0;
+  justify-content: center;
+  margin: 0;
+}
+.sidebar.collapsed .nav-link .icon {
+  margin-right: 0;
+  font-size: 1.5rem;
+}
+.sidebar.collapsed .nav-link span:not(.icon) {
+  display: none;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(0);
+    width: 260px;
+  }
+  
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 260px;
+  }
+}

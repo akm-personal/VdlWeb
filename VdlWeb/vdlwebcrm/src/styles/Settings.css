@@ -1,0 +1,54 @@
+.settings-page {
+  padding: 10px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.rbac-section {
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rbac-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.rbac-section h4 {
+  margin-top: 0;
+  color: var(--text-main);
+  margin-bottom: 15px;
+}
+
+.rbac-roles {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.rbac-role-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-main);
+}
+
+.rbac-users-select {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  min-height: 100px;
+}
