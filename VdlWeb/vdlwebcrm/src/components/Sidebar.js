@@ -34,9 +34,7 @@ const Sidebar = ({ collapsed }) => {
   
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="sidebar-header">
-        <h2>Admin Panel</h2>
-      </div>
+      
       <nav className="sidebar-nav">
         {canAccessPage(user, 'dashboard') && (
           <Link to="/" className="nav-link">
@@ -69,6 +67,8 @@ const Sidebar = ({ collapsed }) => {
           </Link>
         )}
 
+       
+
         {isAdminOrInternal && (
           <Link to="/identityCards" className="nav-link">
             <span className="icon">💳</span>
@@ -87,6 +87,10 @@ const Sidebar = ({ collapsed }) => {
           <span className="nav-text">Settings</span>
         </Link>
       )}
+       <Link to="/application-flow" className="nav-link">
+          <span className="icon">🔄</span>
+          <span className="nav-text">Application Flow</span>
+        </Link>
       </nav>
     </aside>
   );

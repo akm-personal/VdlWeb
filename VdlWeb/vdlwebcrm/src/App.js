@@ -5,12 +5,14 @@ import Dashboard from './features/dashboard/Dashboard';
 import Users from './features/users/Users';
 import Login from './features/auth/Login';
 import Register from './features/auth/Register';
-import StudentDetails from './features/student/studentDetails';
+import AddStudent from './features/student/AddStudent';
 import AllStudent from './features/student/AllStudent';
+import StudentDetails from './features/student/studentDetails';
 import SeatManagement from './features/seats/SeatManagement';
 import ShiftManagement from './features/shift/ShiftManagement';
 import IdentityCard from './features/student/identityCard'; // Import the IdentityCard component
 import Settings from './features/seats/Settings';
+import VdlFlow from './features/shift/VdlFlow';
 import { getCurrentUser } from './utils/rbac';
 import LogsViewer from './components/LogsViewer'; // Import LogsViewer
 import './App.css';
@@ -33,10 +35,12 @@ function App() {
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="users" element={<Users />} />
+          <Route path="addStudent" element={<AddStudent />} />
           <Route path="studentDetails" element={<StudentDetails />} />
           <Route path="allstudent" element={<AllStudent />} />
           <Route path="seats" element={<SeatManagement />} />
           <Route path="shift-management" element={<ShiftManagement />} />
+          <Route path="application-flow" element={<VdlFlow />} />
           <Route path="identityCards" element={<IdentityCard />} /> {/* For Admin/Internal */}
           <Route path="student/identityCards" element={<IdentityCard />} /> {/* For Students */}
           <Route path="settings" element={<Settings />} />

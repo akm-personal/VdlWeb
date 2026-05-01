@@ -1,42 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-// import { allDummyStudents } from '../../utils/dummyDatabase'; // Commented out dummy database import
 import { formatDate, formatDateTime } from '../../utils/helpers';
 import '../../styles/SeatManagement.css';
 import '../../styles/Student.css';
-
-// Dummy student data (replace with API call)
-const allDummyStudents = [ // Re-added for local testing, should be replaced by API call
-  {
-    id: 1,
-    vdlId: 'VDL001',
-    name: 'John Doe',
-    admissionDate: '2023-01-15',
-    fromDate: '2023-01-15',
-    toDate: '2023-04-15',
-    feeStatus: 'Done',
-    email: 'john.doe@example.com',
-    mobileNumber: '9876543210',
-    feeHistory: [],
-  },
-  {
-    id: 2,
-    vdlId: 'VDL002',
-    name: 'Jane Smith',
-    admissionDate: '2023-02-01',
-    fromDate: '2023-02-01',
-    toDate: '2023-05-01',
-    feeStatus: 'Pending',
-    email: 'jane.smith@example.com',
-    mobileNumber: '8765432109',
-    feeHistory: [],
-  },
-];
+import { apiClient, updateStudent } from '../../services/apis';
+import SeatSelectionModal from '../../components/SeatSelectionModal';
 
 const AllStudent = () => {
-  const [students, setStudents] = useState(
-    allDummyStudents.map(s => ({ ...s, feeHistory: s.feeHistory || [] }))
-  );
+  const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
 
   // Modals state
@@ -44,6 +15,11 @@ const AllStudent = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isFeeModalOpen, setIsFeeModalOpen] = useState(false);
   const [isEmailEditModalOpen, setIsEmailEditModalOpen] = useState(false);
+  const [isSeatModalOpen, setIsSeatModalOpen] = useState(false);
+
+  // View Modal API states
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [errorDetails, setErrorDetails] = useState('');
 
   // Forms state
   const [editFormData, setEditFormData] = useState({});
@@ -52,9 +28,78 @@ const AllStudent = () => {
     startDate: '', endDate: '', totalFee: '', collectedFee: '', dueAmount: '', description: '', collectedBy: 'Admin'
   });
 
-  const handleViewClick = (student) => {
+  const dummyShifts = [{ id: 1, name: 'Morning', status: 'active' }, { id: 2, name: 'Afternoon', status: 'active' }];
+  const activeShifts = dummyShifts.filter(s => s.status === 'active');
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const data = await apiClient('/StudentList');
+        const mappedData = data.map(student => ({
+            id: student.id || 'Fake',
+            vdlId: student.vdlId || 'Fake',
+            name: student.name || 'Fake',
+            email: student.email || 'Fake',
+            fatherName: student.fatherName || 'Fake',
+            gender: student.gender || 'Fake',
+            seatNumber: student.seatNumber || 'Fake',
+            shiftType: student.shiftType || 'Fake',
+            address: student.address || 'Fake',
+            alternateNumber: student.alternateNumber || 'Fake',
+            studentClass: student.class || 'Fake',
+            dateOfBirth: student.dateOfBirth ? student.dateOfBirth.split('T')[0] : 'Fake',
+            idProof: student.idProof || 'Fake',
+            mobileNumber: student.mobileNumber || 'Fake',
+            studentStatus: student.studentStatus || 'Fake',
+            admissionDate: student.createdDate ? student.createdDate.split('T')[0] : 'Fake',
+            fromDate: 'Fake',
+            toDate: 'Fake',
+            feeStatus: 'Fake',
+            feeHistory: []
+          }));
+          setStudents(mappedData);
+      } catch (error) {
+        console.error('Error fetching students:', error);
+      }
+    };
+    fetchStudents();
+  }, []);
+
+  const handleViewClick = async (student) => {
     setSelectedStudent(student);
     setIsViewModalOpen(true);
+    setLoadingDetails(true);
+    setErrorDetails('');
+
+    // Agar vdlId 'Fake' hai, to API call na karein.
+    if (!student.vdlId || student.vdlId === 'Fake') {
+      setErrorDetails('Invalid VDL ID. Full details cannot be loaded.');
+      setLoadingDetails(false);
+      return;
+    }
+
+    try {      
+      const data = await apiClient(`/Student/${student.vdlId}`);
+      setSelectedStudent(prev => ({ ...prev, ...data }));
+    } catch (error) {
+      console.error('Error fetching student details:', error);
+      // Error message removed to avoid UI confusion. 
+      // Agar API fail bhi hoti hai toh modal existing basic list data show karta rahega.
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const getShiftId = () => {
+    if (!editFormData.shiftType) return '1'; // Default if not set
+    if (['Morning', 'Afternoon', 'Evening'].includes(editFormData.shiftType)) {
+      return editFormData.shiftType === 'Morning' ? '1' : editFormData.shiftType === 'Afternoon' ? '2' : '3';
+    }
+    return editFormData.shiftType;
+  };
+
+  const handleSeatSelect = (seatNumber) => {
+    setEditFormData(prev => ({ ...prev, seatNumber }));
   };
 
   const handleEditClick = (student) => {
@@ -64,17 +109,52 @@ const AllStudent = () => {
   };
 
   const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    if ((name === 'mobileNumber' || name === 'alternateNumber') && !/^\d*$/.test(value)) {
+    let { name, value } = e.target;
+    if (editFormData[name] === 'Fake' && value.startsWith('Fake')) {
+      value = value.replace('Fake', '');
+    }
+    if ((name === 'mobileNumber' || name === 'alternateNumber') && value !== 'Fake' && !/^\d*$/.test(value)) {
       return; // Only allow digits
     }
     setEditFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    setStudents(students.map(s => s.id === selectedStudent.id ? { ...s, ...editFormData } : s));
-    setIsEditModalOpen(false);
+    
+    // Prepare data for API
+    const studentData = {
+      vdlId: editFormData.vdlId || selectedStudent.vdlId,
+      name: editFormData.name,
+      email: editFormData.email,
+      fatherName: editFormData.fatherName,
+      gender: editFormData.gender ? editFormData.gender.toLowerCase() : 'male',
+      seatNumber: parseInt(editFormData.seatNumber) || 0,
+      shiftType: editFormData.shiftType,
+      address: editFormData.address,
+      alternateNumber: editFormData.alternateNumber,
+      class: editFormData.studentClass,
+      dateOfBirth: editFormData.dateOfBirth ? new Date(editFormData.dateOfBirth).toISOString() : null,
+      idProof: editFormData.idProof,
+      mobileNumber: editFormData.mobileNumber,
+      studentStatus: editFormData.studentStatus
+    };
+
+    try {
+      const updatedStudent = await updateStudent(selectedStudent.vdlId, studentData);
+      // Update local state with API response
+      setStudents(students.map(s => s.id === selectedStudent.id ? { 
+        ...s, 
+        ...updatedStudent, 
+        studentClass: updatedStudent.class, // Map 'class' back to 'studentClass'
+        dateOfBirth: updatedStudent.dateOfBirth ? updatedStudent.dateOfBirth.split('T')[0] : 'Fake' // Convert back to date string
+      } : s));
+      setIsEditModalOpen(false);
+      alert('Student details updated successfully!');
+    } catch (error) {
+      console.error('Error updating student:', error);
+      alert('Failed to update student: ' + error.message);
+    }
   };
 
   const handleEmailEditClick = () => {
@@ -104,8 +184,8 @@ const AllStudent = () => {
   const handleFeeClick = (student) => {
     setSelectedStudent(student);
     setFeeFormData({
-      startDate: student.fromDate || '',
-      endDate: student.toDate || '',
+      startDate: student.fromDate === 'Fake' ? '' : (student.fromDate || ''),
+      endDate: student.toDate === 'Fake' ? '' : (student.toDate || ''),
       totalFee: '',
       collectedFee: '',
       dueAmount: '',
@@ -159,8 +239,8 @@ const AllStudent = () => {
 
   const openPayDueModal = (entry) => {
     setFeeFormData({
-      startDate: entry.startDate || selectedStudent.fromDate || '',
-      endDate: entry.endDate || selectedStudent.toDate || '',
+      startDate: entry.startDate || (selectedStudent.fromDate === 'Fake' ? '' : selectedStudent.fromDate) || '',
+      endDate: entry.endDate || (selectedStudent.toDate === 'Fake' ? '' : selectedStudent.toDate) || '',
       totalFee: entry.dueAmount || '',
       collectedFee: '',
       dueAmount: entry.dueAmount || '',
@@ -173,7 +253,7 @@ const AllStudent = () => {
     <div className="student-page">
       <div className="student-header">
         <h2>All Students</h2>
-        <Link to="/studentDetails" className="btn-primary-action" style={{ textDecoration: 'none', width: 'auto', padding: '10px 20px' }}>
+        <Link to="/addStudent" className="btn-primary-action" style={{ textDecoration: 'none', width: 'auto', padding: '10px 20px' }}>
           + Add New Student
         </Link>
       </div>
@@ -197,9 +277,9 @@ const AllStudent = () => {
                 <tr key={student.id}>
                   <td>{student.vdlId}</td>
                   <td style={{fontWeight: 'bold'}}>{student.name}</td>
-                  <td>{student.admissionDate ? formatDate(student.admissionDate) : 'N/A'}</td>
-                  <td>{student.fromDate ? formatDate(student.fromDate) : 'N/A'}</td>
-                  <td>{student.toDate ? formatDate(student.toDate) : 'N/A'}</td>
+                  <td>{student.admissionDate && student.admissionDate !== 'Fake' ? formatDate(student.admissionDate) : 'Fake'}</td>
+                  <td>{student.fromDate && student.fromDate !== 'Fake' ? formatDate(student.fromDate) : 'Fake'}</td>
+                  <td>{student.toDate && student.toDate !== 'Fake' ? formatDate(student.toDate) : 'Fake'}</td>
                   <td>
                     <span className={`status-badge ${student.feeStatus === 'Done' ? 'fully-booked' : 'pending'}`}>
                       {student.feeStatus}
@@ -224,19 +304,41 @@ const AllStudent = () => {
 
       {/* VIEW MODAL */}
       {isViewModalOpen && selectedStudent && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
+        <div className="modal-overlay" style={{ zIndex: 1000, backdropFilter: 'blur(5px)', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="modal-content" style={{ maxWidth: '650px', width: '95%', borderRadius: '16px', boxShadow: '0 15px 35px rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="modal-header">
               <h3>Student Details</h3>
               <button className="btn-close-icon" onClick={() => setIsViewModalOpen(false)}>&times;</button>
             </div>
-            <div className="modal-body student-details-grid">
-              <p><strong>ID:</strong> {selectedStudent.vdlId}</p>
-              <p><strong>Name:</strong> {selectedStudent.name}</p>
-              <p><strong>Admission Date:</strong> {selectedStudent.admissionDate ? formatDate(selectedStudent.admissionDate) : 'N/A'}</p>
-              <p><strong>From Date:</strong> {selectedStudent.fromDate ? formatDate(selectedStudent.fromDate) : 'N/A'}</p>
-              <p><strong>To Date:</strong> {selectedStudent.toDate ? formatDate(selectedStudent.toDate) : 'N/A'}</p>
-              <p><strong>Fee Status:</strong> <span className={`status-badge ${selectedStudent.feeStatus === 'Done' ? 'fully-booked' : 'pending'}`}>{selectedStudent.feeStatus}</span></p>
+            <div className="modal-body">
+              {loadingDetails ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: '#3498db' }}>
+                  <p>Loading full details...</p>
+                </div>
+              ) : (
+                <>
+                  {errorDetails && <p style={{ color: '#e74c3c', marginBottom: '15px', textAlign: 'center' }}>{errorDetails}</p>}
+                  <div className="student-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', textAlign: 'left', background: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
+                    <p><strong>VDL ID:</strong> {selectedStudent.vdlId}</p>
+                    <p><strong>Name:</strong> {selectedStudent.name}</p>
+                    <p><strong>Email:</strong> {selectedStudent.email !== 'Fake' ? selectedStudent.email : 'N/A'}</p>
+                    <p><strong>Mobile:</strong> {selectedStudent.mobileNumber !== 'Fake' ? selectedStudent.mobileNumber : 'N/A'}</p>
+                    <p><strong>Alternate No:</strong> {selectedStudent.alternateNumber !== 'Fake' ? selectedStudent.alternateNumber : 'N/A'}</p>
+                    <p><strong>Father's Name:</strong> {selectedStudent.fatherName !== 'Fake' ? selectedStudent.fatherName : 'N/A'}</p>
+                    <p><strong>Gender:</strong> {selectedStudent.gender !== 'Fake' ? selectedStudent.gender : 'N/A'}</p>
+                    <p><strong>DOB:</strong> {selectedStudent.dateOfBirth && selectedStudent.dateOfBirth !== 'Fake' ? formatDate(selectedStudent.dateOfBirth) : 'N/A'}</p>
+                    <p><strong>Class:</strong> {selectedStudent.class || (selectedStudent.studentClass !== 'Fake' ? selectedStudent.studentClass : 'N/A')}</p>
+                    <p><strong>Seat Number:</strong> {selectedStudent.seatNumber !== 'Fake' ? selectedStudent.seatNumber : 'N/A'}</p>
+                    <p><strong>Shift:</strong> {selectedStudent.shiftType !== 'Fake' ? selectedStudent.shiftType : 'N/A'}</p>
+                    <p><strong>ID Proof:</strong> {selectedStudent.idProof !== 'Fake' ? selectedStudent.idProof : 'N/A'}</p>
+                    <p><strong>Student Status:</strong> <span className={`status-badge ${selectedStudent.studentStatus === 'Active' ? 'fully-booked' : 'locked'}`}>{selectedStudent.studentStatus || 'N/A'}</span></p>
+                    <p><strong>Fee Status:</strong> <span className={`status-badge ${selectedStudent.feeStatus === 'Done' ? 'fully-booked' : 'pending'}`}>{selectedStudent.feeStatus}</span></p>
+                    <p style={{ gridColumn: '1 / -1' }}><strong>Address:</strong> {selectedStudent.address !== 'Fake' ? selectedStudent.address : 'N/A'}</p>
+                    <p style={{ gridColumn: '1 / -1' }}><strong>Admission Date:</strong> {selectedStudent.admissionDate && selectedStudent.admissionDate !== 'Fake' ? formatDate(selectedStudent.admissionDate) : 'N/A'}</p>
+                    {selectedStudent.createdDate && <p style={{ gridColumn: '1 / -1' }}><strong>Record Created:</strong> {formatDateTime(selectedStudent.createdDate)}</p>}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -244,8 +346,8 @@ const AllStudent = () => {
 
       {/* EDIT MODAL */}
       {isEditModalOpen && selectedStudent && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '800px', width: '90%' }}>
+        <div className="modal-overlay" style={{ zIndex: 1000, backdropFilter: 'blur(5px)', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="modal-content" style={{ maxWidth: '800px', width: '90%', borderRadius: '16px', boxShadow: '0 15px 35px rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="modal-header">
               <h3>Edit Student: {selectedStudent.vdlId}</h3>
               <button className="btn-close-icon" onClick={() => setIsEditModalOpen(false)}>&times;</button>
@@ -258,7 +360,7 @@ const AllStudent = () => {
                 </div>
                 <div className="form-group">
                   <label>Email <span style={{color: '#3498db', cursor: 'pointer', float: 'right', fontSize: '12px'}} onClick={handleEmailEditClick}>(Edit - Admin)</span></label>
-                  <input type="email" name="email" value={editFormData.email || ''} disabled style={{ backgroundColor: '#eee', cursor: 'not-allowed', color: '#777' }} />
+                  <input type={editFormData.email === 'Fake' ? 'text' : 'email'} name="email" value={editFormData.email || ''} disabled style={{ backgroundColor: '#eee', cursor: 'not-allowed', color: '#777' }} />
                 </div>
                 <div className="form-group">
                   <label>Father's Name</label>
@@ -266,7 +368,7 @@ const AllStudent = () => {
                 </div>
                 <div className="form-group">
                   <label>Date of Birth</label>
-                  <input type="date" name="dateOfBirth" value={editFormData.dateOfBirth || ''} onChange={handleEditChange} />
+                  <input type={editFormData.dateOfBirth === 'Fake' ? 'text' : 'date'} name="dateOfBirth" value={editFormData.dateOfBirth || ''} onChange={handleEditChange} />
                 </div>
                 <div className="form-group">
                   <label>Gender</label>
@@ -274,15 +376,16 @@ const AllStudent = () => {
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Other">Other</option>
+                    <option value="Fake" style={{display: 'none'}}>Fake</option>
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Mobile Number</label>
-                  <input type="tel" name="mobileNumber" value={editFormData.mobileNumber || ''} onChange={handleEditChange} maxLength="10" pattern="\d{10}" title="Please enter a 10-digit mobile number" />
+                  <input type={editFormData.mobileNumber === 'Fake' ? 'text' : 'tel'} name="mobileNumber" value={editFormData.mobileNumber || ''} onChange={handleEditChange} maxLength={editFormData.mobileNumber === 'Fake' ? undefined : "10"} pattern={editFormData.mobileNumber === 'Fake' ? undefined : "\\d{10}"} title="Please enter a 10-digit mobile number" />
                 </div>
                 <div className="form-group">
                   <label>Alternate Number</label>
-                  <input type="tel" name="alternateNumber" value={editFormData.alternateNumber || ''} onChange={handleEditChange} maxLength="10" pattern="\d{10}" title="Please enter a 10-digit alternate number" />
+                  <input type={editFormData.alternateNumber === 'Fake' ? 'text' : 'tel'} name="alternateNumber" value={editFormData.alternateNumber || ''} onChange={handleEditChange} maxLength={editFormData.alternateNumber === 'Fake' ? undefined : "10"} pattern={editFormData.alternateNumber === 'Fake' ? undefined : "\\d{10}"} title="Please enter a 10-digit alternate number" />
                 </div>
                 <div className="form-group">
                   <label>Class</label>
@@ -298,30 +401,38 @@ const AllStudent = () => {
                     <option value="Morning">Morning</option>
                     <option value="Afternoon">Afternoon</option>
                     <option value="Evening">Evening</option>
+                    <option value="Fake" style={{display: 'none'}}>Fake</option>
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Seat Number</label>
-                  <input type="number" name="seatNumber" value={editFormData.seatNumber || ''} onChange={handleEditChange} />
+                  <input type={editFormData.seatNumber === 'Fake' ? 'text' : 'number'} name="seatNumber" value={editFormData.seatNumber || ''} onChange={handleEditChange} readOnly placeholder="Select a seat" />
+                  <span
+                    onClick={() => setIsSeatModalOpen(true)}
+                    style={{ color: '#3498db', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline', marginTop: '5px', display: 'inline-block', fontWeight: 'bold' }}
+                  >
+                    👁️ Check & Select Seat
+                  </span>
                 </div>
                 <div className="form-group">
                   <label>Student Status</label>
                   <select name="studentStatus" value={editFormData.studentStatus || 'Active'} onChange={handleEditChange}>
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
+                    <option value="Fake" style={{display: 'none'}}>Fake</option>
                   </select>
                 </div>
                 <div className="form-group">
                   <label>Admission Date</label>
-                  <input type="date" name="admissionDate" value={editFormData.admissionDate || ''} onChange={handleEditChange} required />
+                  <input type={editFormData.admissionDate === 'Fake' ? 'text' : 'date'} name="admissionDate" value={editFormData.admissionDate || ''} onChange={handleEditChange} required />
                 </div>
                 <div className="form-group">
                   <label>From Date</label>
-                  <input type="date" name="fromDate" value={editFormData.fromDate || ''} onChange={handleEditChange} required />
+                  <input type={editFormData.fromDate === 'Fake' ? 'text' : 'date'} name="fromDate" value={editFormData.fromDate || ''} onChange={handleEditChange} required />
                 </div>
                 <div className="form-group full-width">
                   <label>To Date</label>
-                  <input type="date" name="toDate" value={editFormData.toDate || ''} onChange={handleEditChange} required />
+                  <input type={editFormData.toDate === 'Fake' ? 'text' : 'date'} name="toDate" value={editFormData.toDate || ''} onChange={handleEditChange} required />
                 </div>
                 <div className="form-group full-width">
                   <label>Address</label>
@@ -338,8 +449,8 @@ const AllStudent = () => {
 
       {/* EMAIL UPDATE MODAL */}
       {isEmailEditModalOpen && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+        <div className="modal-overlay" style={{ zIndex: 1100, backdropFilter: 'blur(8px)', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div className="modal-content" style={{ maxWidth: '400px', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="modal-header">
               <h3>Update Email</h3>
               <button className="btn-close-icon" onClick={() => setIsEmailEditModalOpen(false)}>&times;</button>
@@ -369,8 +480,8 @@ const AllStudent = () => {
 
       {/* FEE MANAGEMENT MODAL */}
       {isFeeModalOpen && selectedStudent && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '850px', width: '90%' }}>
+        <div className="modal-overlay" style={{ zIndex: 1000, backdropFilter: 'blur(5px)', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <div className="modal-content" style={{ maxWidth: '850px', width: '90%', borderRadius: '16px', boxShadow: '0 15px 35px rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="modal-header">
               <h3>Fee Management: {selectedStudent.name}</h3>
               <button className="btn-close-icon" onClick={() => setIsFeeModalOpen(false)}>&times;</button>
@@ -456,6 +567,17 @@ const AllStudent = () => {
           </div>
         </div>
       )}
+
+      {/* SEAT SELECTION MODAL */}
+      <SeatSelectionModal
+        isOpen={isSeatModalOpen}
+        onClose={() => setIsSeatModalOpen(false)}
+        onSeatSelect={handleSeatSelect}
+        selectedSeat={editFormData.seatNumber}
+        shiftType={editFormData.shiftType}
+        activeShifts={activeShifts}
+        currentUserVdlId={selectedStudent?.vdlId}
+      />
 
     </div>
   );

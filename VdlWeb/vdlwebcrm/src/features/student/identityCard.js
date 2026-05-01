@@ -1,33 +1,33 @@
 import React, { useState, useEffect } from 'react';
-// import { allDummyStudents } from '../../utils/dummyDatabase'; // Commented out dummy database import
+// import { allDummyStudents } from '../../utils/dummyDatabase';
 import '../../styles/IdentityCard.css';
 import { getCurrentUser } from '../../utils/rbac'; // Import getCurrentUser to get logged-in user info
 import html2canvas from 'html2canvas'; // Import html2canvas
 
 // Dummy student data (replace with API call)
-// const allDummyStudents = [
-//   {
-//     id: 1,
-//     vdlId: 'VDL001',
-//     name: 'John Doe',
-//     studentClass: '10A',
-//     shiftType: 'Morning',
-//     seatNumber: '1',
-//     email: 'john.doe@example.com',
-//     mobileNumber: '9876543210',
-//   },
-//   {
-//     id: 2,
-//     vdlId: 'VDL002',
-//     name: 'Jane Smith',
-//     studentClass: '11B',
-//     shiftType: 'Afternoon',
-//     seatType: 'Regular', // Added for completeness
-//     seatNumber: '5',
-//     email: 'jane.smith@example.com',
-//     mobileNumber: '8765432109',
-//   },
-// ];
+const allDummyStudents = [
+  {
+    id: 1,
+    vdlId: 'VDL001',
+    name: 'John Doe',
+    studentClass: '10A',
+    shiftType: 'Morning',
+    seatNumber: '1',
+    email: 'john.doe@example.com',
+    mobileNumber: '9876543210',
+  },
+  {
+    id: 2,
+    vdlId: 'VDL002',
+    name: 'Jane Smith',
+    studentClass: '11B',
+    shiftType: 'Afternoon',
+    seatType: 'Regular', // Added for completeness
+    seatNumber: '5',
+    email: 'jane.smith@example.com',
+    mobileNumber: '8765432109',
+  },
+];
 
 const IdentityCard = () => {
   const [students, setStudents] = useState([]);

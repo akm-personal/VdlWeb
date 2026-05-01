@@ -7,22 +7,22 @@ let logs = [];
 const LOG_STORAGE_KEY = 'api_logs';
 let listeners = [];
 
-// Load logs from sessionStorage on initialization
+// Load logs from localStorage on initialization so logs persist across refreshes
 try {
-  const storedLogs = sessionStorage.getItem(LOG_STORAGE_KEY);
+  const storedLogs = localStorage.getItem(LOG_STORAGE_KEY);
   if (storedLogs) {
     logs = JSON.parse(storedLogs);
   }
 } catch (e) {
-  console.error("Failed to load logs from sessionStorage:", e);
+  console.error("Failed to load logs from localStorage:", e);
   logs = []; // Fallback to empty array if parsing fails
 }
 
 const saveLogs = () => {
   try {
-    sessionStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
+    localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
   } catch (e) {
-    console.error("Failed to save logs to sessionStorage:", e);
+    console.error("Failed to save logs to localStorage:", e);
   }
 };
 
@@ -59,4 +59,11 @@ export const subscribeToLogs = (callback) => {
     // Return an unsubscribe function
     listeners = listeners.filter(listener => listener !== callback);
   };
+};
+
+// Function to clear all logs
+export const clearLogs = () => {
+  logs = [];
+  saveLogs();
+  notifyListeners();
 };

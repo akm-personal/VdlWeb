@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getCurrentUser } from '../../utils/rbac';
 import { Link, useNavigate } from 'react-router-dom';
-// import { dummyUsers, shifts as dbShifts, seatDummyStudents } from '../../utils/dummyDatabase'; // Commented out dummy database imports
+// import { dummyUsers, shifts as dbShifts, seatDummyStudents } from '../../utils/dummyDatabase'; 
 import '../../styles/Student.css';
 import '../../styles/SeatManagement.css';
 import IdentityCard from './identityCard';
+import SeatSelectionModal from '../../components/SeatSelectionModal';
 
 const StudentDetails = () => {
   const currentUser = getCurrentUser();
@@ -13,10 +14,15 @@ const StudentDetails = () => {
   const [vdlId, setVdlId] = useState('');
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [isSeatModalOpen, setIsSeatModalOpen] = useState(false);
-  const [seatLayout, setSeatLayout] = useState([]);
   const [prefilledFields, setPrefilledFields] = useState({ email: false, mobile: false });
   const [isSelfieModalOpen, setIsSelfieModalOpen] = useState(false);
   const [selfieImage, setSelfieImage] = useState(null);
+  
+  // Camera specific states & refs
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
 
   // Dummy data for shifts (replace with API call)
   const dummyShifts = [{ id: 1, name: 'Morning', status: 'active' }, { id: 2, name: 'Afternoon', status: 'active' }];
@@ -57,8 +63,6 @@ const StudentDetails = () => {
       if (studentInfoFromAuth) {
         setVdlId(studentInfoFromAuth.username); // Assuming VDL ID is the username for now
         setPrefilledFields({
-          email: !!studentInfo.email,
-          mobile: !!studentInfo.mobile,
           email: !!studentInfoFromAuth.email,
           mobile: !!studentInfoFromAuth.mobileNumber // Assuming mobileNumber from API
         });
@@ -85,60 +89,8 @@ const StudentDetails = () => {
     }
   }, [isStudent, currentUser?.id, currentUser?.name]);
 
-  // Dummy seat data for demonstration (replace with API call)
-  const dummySeatStudents = [
-    { id: 1, vdlId: 'VDL001', name: 'John Doe', feeStatus: 'Pending' },
-    { id: 2, vdlId: 'VDL002', name: 'Jane Smith', feeStatus: 'Paid' },
-  ];
-
-  const loadSeats = () => {
-    const stored = localStorage.getItem('vdl_seats');
-    if (stored) {
-      setSeatLayout(JSON.parse(stored));
-    } else {
-      // Initial seat setup (dummy data)
-      const seats = [];
-      let idCounter = 1;
-      for (let r = 1; r <= 4; r++) {
-        for (let n = 1; n <= 20; n++) {
-          let seatNumber = (r - 1) * 20 + n;
-          const defaultShifts = {};
-          dbShifts.forEach(shift => {
-            defaultShifts[shift.id] = { status: 'available', student: null };
-          });
-          seats.push({ id: idCounter++, row: r, number: seatNumber, locked: false, shifts: defaultShifts });
-        }
-      }
-      if (seatDummyStudents.length > 0 && seats.length > 0) {
-        if (seats[0].shifts['1']) seats[0].shifts['1'] = { status: 'booked', student: seatDummyStudents[0] };
-        if (seats[0].shifts['2']) seats[0].shifts['2'] = { status: 'booked', student: seatDummyStudents[0] };
-        if (seats[1].shifts['3']) seats[1].shifts['3'] = { status: 'pending', student: seatDummyStudents[1] };
-        if (seats[2].shifts['1']) seats[2].shifts['1'] = { status: 'booked', student: seatDummyStudents[2] };
-      if (dummySeatStudents.length > 0 && seats.length > 0) {
-        if (seats[0].shifts['1']) seats[0].shifts['1'] = { status: 'booked', student: dummySeatStudents[0] };
-        if (seats[0].shifts['2']) seats[0].shifts['2'] = { status: 'booked', student: dummySeatStudents[0] };
-        if (seats[1].shifts['3']) seats[1].shifts['3'] = { status: 'pending', student: dummySeatStudents[1] };
-        if (seats[2].shifts['1']) seats[2].shifts['1'] = { status: 'booked', student: dummySeatStudents[2] };
-      }
-      localStorage.setItem('vdl_seats', JSON.stringify(seats));
-      setSeatLayout(seats);
-    }
-  };
-
-  const openSeatModal = () => {
-    loadSeats();
-    setIsSeatModalOpen(true);
-  };
-
-  const handleSeatSelect = (seat) => {
-    const shiftId = getShiftId();
-    const shiftData = seat.shifts[shiftId];
-    if (seat.locked || (shiftData && shiftData.status !== 'available')) {
-      alert('This seat is not available for the selected shift.');
-      return;
-    }
-    setFormData(prev => ({ ...prev, seatNumber: seat.number }));
-    setIsSeatModalOpen(false);
+  const handleSeatSelect = (seatNumber) => {
+    setFormData(prev => ({ ...prev, seatNumber }));
   };
 
   const handleChange = (e) => {
@@ -176,7 +128,6 @@ const StudentDetails = () => {
                   status: 'booked',
                   student: {
                     id: currentUser?.id || Date.now(),
-                    vdlId: vdlId || 'VDL_NEW',
                     vdlId: currentUser?.username || 'VDL_NEW', // Use currentUser.username as VDL ID
                     name: finalFormData.name,
                     feeStatus: 'Pending',
@@ -204,22 +155,63 @@ const StudentDetails = () => {
 
   const disableForm = isStudent && isProfileComplete;
 
-  const handleTakeSelfie = () => {
-    // Simulate taking a picture using a random placeholder API
-    const randomImage = `https://i.pravatar.cc/150?u=${Date.now()}`;
-    setSelfieImage(randomImage);
-    
-    // Update local profile with the new selfie
+  const startCamera = async () => {
+    setCapturedImage(null); // Reset if retaking
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setIsCameraActive(true);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      alert("Please allow camera permissions to take a selfie.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = videoRef.current.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = canvas.toDataURL('image/png');
+      setCapturedImage(imageData);
+      stopCamera();
+    }
+  };
+
+  const saveSelfie = () => {
+    if (!capturedImage) return;
+    setSelfieImage(capturedImage);
+
     const savedProfile = JSON.parse(localStorage.getItem(`vdl_profile_${currentUser.id}`) || '{}');
-    savedProfile.selfieImage = randomImage;
+    savedProfile.selfieImage = capturedImage;
     localStorage.setItem(`vdl_profile_${currentUser.id}`, JSON.stringify(savedProfile));
 
     // TODO: Send API request to save the image in 'student/setudentimage' folder
-    console.log("Saving image to 'student/setudentimage' directory...");
+    console.log("Saving actual image data to 'student/studentImage' directory...");
 
     setIsSelfieModalOpen(false);
     navigate('/identityCards');
   };
+
+  useEffect(() => {
+    if (!isSelfieModalOpen) {
+      stopCamera();
+      setCapturedImage(null);
+    }
+  }, [isSelfieModalOpen]);
 
   return (
     <div className="student-page">
@@ -297,7 +289,7 @@ const StudentDetails = () => {
             <input type="number" name="seatNumber" value={formData.seatNumber} onChange={handleChange} placeholder="Select a seat from below" disabled={disableForm} readOnly />
             {!disableForm && (
               <span 
-                onClick={openSeatModal} 
+                onClick={() => setIsSeatModalOpen(true)} 
                 style={{ color: '#3498db', fontSize: '13px', cursor: 'pointer', textDecoration: 'underline', marginTop: '5px', display: 'inline-block', fontWeight: 'bold' }}
               >
                 👁️ Check & Select Seat
@@ -338,69 +330,54 @@ const StudentDetails = () => {
       </div>
 
       {/* Seat Selection Modal */}
-      {isSeatModalOpen && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
-          <div className="modal-content modal-content-large" style={{ maxWidth: '800px', width: '95%' }}>
-            <div className="modal-header">
-              <h3>Select Seat for {
-                activeShifts.find(s => String(s.id) === getShiftId())?.name || formData.shiftType
-              }</h3>
-              <button className="btn-close-icon" type="button" onClick={() => setIsSeatModalOpen(false)}>&times;</button>
-            </div>
-            <div className="modal-body seat-layout" style={{ display: 'block' }}>
-              <div className="seat-legend" style={{ justifyContent: 'center', marginBottom: '15px' }}>
-                <span className="legend-item"><div className="legend-box available"></div> Available</span>
-                <span className="legend-item"><div className="legend-box fully-booked"></div> Occupied</span>
-                <span className="legend-item"><div className="legend-box locked"></div> Locked</span>
-              </div>
-              <div className="seat-grid-container table-responsive" style={{ width: '100%', maxHeight: '60vh', overflowY: 'auto' }}>
-                {Array.from(new Set(seatLayout.map(s => s.row))).map(rowNum => {
-                  const rowSeats = seatLayout.filter(s => s.row === rowNum).sort((a,b) => a.number - b.number);
-                  if(rowSeats.length === 0) return null;
-                  return (
-                    <div key={rowNum} className="seat-row-wrapper" style={{ margin: '10px 0' }}>
-                      <div className="column-label" style={{ minWidth: '60px' }}>Row {rowNum}</div>
-                      <div className="seat-row">
-                        {rowSeats.map(seat => {
-                          const shiftId = getShiftId();
-                          const shiftData = seat.shifts[shiftId];
-                          const isAvailable = !seat.locked && (!shiftData || shiftData.status === 'available');
-                          const statusClass = seat.locked ? 'locked' : (isAvailable ? 'available' : 'fully-booked');
-                          
-                          return (
-                            <div 
-                              key={seat.id} 
-                              className={`seat-box ${statusClass} ${Number(formData.seatNumber) === seat.number ? 'selected' : ''}`}
-                              onClick={() => handleSeatSelect(seat)}
-                              title={`Seat ${seat.number} - ${isAvailable ? 'Available' : 'Occupied'}`}
-                            >
-                              {seat.locked && <span className="lock-icon">🔒</span>}
-                              <span className="seat-number font-14">{seat.number}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <SeatSelectionModal
+        isOpen={isSeatModalOpen}
+        onClose={() => setIsSeatModalOpen(false)}
+        onSeatSelect={handleSeatSelect}
+        selectedSeat={formData.seatNumber}
+        shiftType={formData.shiftType}
+        activeShifts={activeShifts}
+      />
 
       {/* Selfie Popup Modal */}
       {isSelfieModalOpen && (
-        <div className="modal-overlay" style={{ zIndex: 1200 }}>
-          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }}>
+        <div className="modal-overlay" style={{ zIndex: 1200, backdropFilter: 'blur(8px)', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="modal-header">
               <h3>Take Selfie</h3>
               <button className="btn-close-icon" type="button" onClick={() => setIsSelfieModalOpen(false)}>&times;</button>
             </div>
             <div className="modal-body">
               <p style={{ color: '#e74c3c', fontWeight: 'bold', marginBottom: '20px' }}>Note: Yeh image aapke identity card pe show hoga.</p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '15px' }}>
-                <button type="button" onClick={handleTakeSelfie} className="btn-primary-action" style={{ width: 'auto', padding: '10px 20px' }}>📸 Capture Selfie</button>
+              
+              {/* Camera UI Area */}
+              <div style={{ marginBottom: '20px' }}>
+                <video ref={videoRef} autoPlay playsInline style={{ width: '100%', borderRadius: '8px', backgroundColor: '#000', transform: 'scaleX(-1)', display: isCameraActive ? 'block' : 'none' }}></video>
+                <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+
+                {!isCameraActive && capturedImage && (
+                  <img src={capturedImage} alt="Captured Selfie" style={{ width: '100%', borderRadius: '8px', border: '2px solid #27ae60' }} />
+                )}
+                {!isCameraActive && !capturedImage && (
+                   <div style={{ width: '100%', height: '180px', backgroundColor: '#f0f0f0', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7f8c8d' }}>
+                     Camera Not Active
+                   </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {!isCameraActive && !capturedImage && (
+                  <button type="button" onClick={startCamera} className="btn-primary-action" style={{ width: 'auto', padding: '10px 20px' }}>📸 Open Camera</button>
+                )}
+                {isCameraActive && (
+                  <button type="button" onClick={capturePhoto} className="btn-primary-action" style={{ width: 'auto', padding: '10px 20px', backgroundColor: '#e67e22' }}>🟢 Click Photo</button>
+                )}
+                {capturedImage && (
+                  <>
+                    <button type="button" onClick={startCamera} className="btn-primary-action" style={{ width: 'auto', padding: '10px 20px', backgroundColor: '#95a5a6' }}>🔄 Retake</button>
+                    <button type="button" onClick={saveSelfie} className="btn-primary-action" style={{ width: 'auto', padding: '10px 20px', backgroundColor: '#27ae60' }}>✅ Save & Continue</button>
+                  </>
+                )}
                 <button type="button" onClick={() => setIsSelfieModalOpen(false)} className="btn-remove-seat" style={{ width: 'auto', padding: '10px 20px' }}>Skip / Close</button>
               </div>
             </div>
@@ -410,5 +387,4 @@ const StudentDetails = () => {
     </div>
   );
 };
-}
 export default StudentDetails;

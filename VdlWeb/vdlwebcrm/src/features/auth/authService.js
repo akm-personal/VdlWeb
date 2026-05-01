@@ -1,12 +1,15 @@
-import api from '../../services/apis';
+import apiClient from '../../services/apis';
 import { logApiCall } from '../../utils/logs';
 
 export const authService = {
   login: async (credentials) => {
     try {
-      const response = await api.post('/auth/login', credentials);
-      logApiCall('info', 'Login API call successful', { endpoint: '/auth/login', request: credentials, response: response.data });
-      return response.data;
+      const data = await apiClient('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials)
+      });
+      logApiCall('info', 'Login API call successful', { endpoint: '/auth/login', request: credentials, response: data });
+      return data;
     } catch (error) {
       logApiCall('error', 'Login API call failed', { endpoint: '/auth/login', request: credentials, error: error.message, response: error.response?.data });
       throw error; // Re-throw the error so the calling component can handle it
@@ -25,9 +28,12 @@ export const authService = {
   register: async (userData) => {
     // Assuming a register endpoint exists
     try {
-      const response = await api.post('/auth/register', userData);
-      logApiCall('info', 'Register API call successful', { endpoint: '/auth/register', request: userData, response: response.data });
-      return response.data;
+      const data = await apiClient('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(userData)
+      });
+      logApiCall('info', 'Register API call successful', { endpoint: '/auth/register', request: userData, response: data });
+      return data;
     } catch (error) {
       logApiCall('error', 'Register API call failed', { endpoint: '/auth/register', request: userData, error: error.message, response: error.response?.data });
       throw error; // Re-throw the error so the calling component can handle it
