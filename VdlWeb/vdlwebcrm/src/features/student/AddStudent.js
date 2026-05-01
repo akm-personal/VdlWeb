@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getCurrentUser } from '../../utils/rbac';
 import { Link, useNavigate } from 'react-router-dom';
 // import { dummyUsers, shifts as dbShifts, seatDummyStudents } from '../../utils/dummyDatabase'; 
@@ -20,6 +20,12 @@ const AddStudent = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [registrationResult, setRegistrationResult] = useState(null); // Success data from API
+  
+  // Camera specific states & refs
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
 
   // Dummy data for shifts (replace with API call)
   const dummyShifts = [{ id: 1, name: 'Morning', status: 'active' }, { id: 2, name: 'Afternoon', status: 'active' }];
@@ -197,22 +203,63 @@ const AddStudent = () => {
 
   const disableForm = isStudent && isProfileComplete;
 
-  const handleTakeSelfie = () => {
-    // Simulate taking a picture using a random placeholder API
-    const randomImage = `https://i.pravatar.cc/150?u=${Date.now()}`;
-    setSelfieImage(randomImage);
-    
-    // Update local profile with the new selfie
+  const startCamera = async () => {
+    setCapturedImage(null); // Reset if retaking
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setIsCameraActive(true);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      alert("Please allow camera permissions to take a selfie.");
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = videoRef.current.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = canvas.toDataURL('image/png');
+      setCapturedImage(imageData);
+      stopCamera();
+    }
+  };
+
+  const saveSelfie = () => {
+    if (!capturedImage) return;
+    setSelfieImage(capturedImage);
+
     const savedProfile = JSON.parse(localStorage.getItem(`vdl_profile_${currentUser.id}`) || '{}');
-    savedProfile.selfieImage = randomImage;
+    savedProfile.selfieImage = capturedImage;
     localStorage.setItem(`vdl_profile_${currentUser.id}`, JSON.stringify(savedProfile));
 
     // TODO: Send API request to save the image in 'student/setudentimage' folder
-    console.log("Saving image to 'student/setudentimage' directory...");
+    console.log("Saving actual image data to 'student/studentImage' directory...");
 
     setIsSelfieModalOpen(false);
     navigate('/identityCards');
   };
+
+  useEffect(() => {
+    if (!isSelfieModalOpen) {
+      stopCamera();
+      setCapturedImage(null);
+    }
+  }, [isSelfieModalOpen]);
 
   return (
     <div className="student-page">
