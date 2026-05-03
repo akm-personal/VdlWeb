@@ -6,6 +6,7 @@ import '../../styles/Student.css';
 import '../../styles/SeatManagement.css';
 import IdentityCard from './identityCard';
 import SeatSelectionModal from '../../components/SeatSelectionModal';
+import { updateStudent } from '../../services/apis';
 
 const StudentDetails = () => {
   const currentUser = getCurrentUser();
@@ -101,7 +102,7 @@ const StudentDetails = () => {
     setFormData(prevState => ({ ...prevState, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Ensure student status is 'Active' by default for students
@@ -110,47 +111,72 @@ const StudentDetails = () => {
       studentStatus: isStudent ? 'Active' : formData.studentStatus
     };
 
-    console.log('Form Submitted: Ready for API Integration', finalFormData);
-    
-    // Share booking state with SeatManagement module via localStorage
-    if (finalFormData.seatNumber && finalFormData.shiftType) {
-      const shiftId = getShiftId();
-      const stored = localStorage.getItem('vdl_seats');
-      if (stored) {
-        const seats = JSON.parse(stored);
-        const updatedSeats = seats.map(s => {
-          if (s.number === Number(finalFormData.seatNumber)) {
-            return {
-              ...s,
-              shifts: {
-                ...s.shifts,
-                [shiftId]: {
-                  status: 'booked',
-                  student: {
-                    id: currentUser?.id || Date.now(),
-                    vdlId: currentUser?.username || 'VDL_NEW', // Use currentUser.username as VDL ID
-                    name: finalFormData.name,
-                    feeStatus: 'Pending',
+    // Prepare data for API (same format as AllStudent.js)
+    const studentData = {
+      vdlId: vdlId || currentUser?.username,
+      name: finalFormData.name,
+      email: finalFormData.email,
+      fatherName: finalFormData.fatherName,
+      gender: finalFormData.gender ? finalFormData.gender.toLowerCase() : 'male',
+      seatNumber: parseInt(finalFormData.seatNumber) || 0,
+      shiftType: finalFormData.shiftType,
+      address: finalFormData.address,
+      alternateNumber: finalFormData.alternateNumber,
+      class: finalFormData.studentClass,
+      dateOfBirth: finalFormData.dateOfBirth ? new Date(finalFormData.dateOfBirth).toISOString() : null,
+      idProof: finalFormData.idProof,
+      mobileNumber: finalFormData.mobileNumber,
+      studentStatus: finalFormData.studentStatus
+    };
+
+    try {
+      // Use API call to update student details
+      const updatedStudent = await updateStudent(vdlId || currentUser?.username, studentData);
+      
+      // Share booking state with SeatManagement module via localStorage
+      if (finalFormData.seatNumber && finalFormData.shiftType) {
+        const shiftId = getShiftId();
+        const stored = localStorage.getItem('vdl_seats');
+        if (stored) {
+          const seats = JSON.parse(stored);
+          const updatedSeats = seats.map(s => {
+            if (s.number === Number(finalFormData.seatNumber)) {
+              return {
+                ...s,
+                shifts: {
+                  ...s.shifts,
+                  [shiftId]: {
+                    status: 'booked',
+                    student: {
+                      id: currentUser?.id || Date.now(),
+                      vdlId: currentUser?.username || 'VDL_NEW',
+                      name: finalFormData.name,
+                      feeStatus: 'Pending',
+                    }
                   }
                 }
               }
             };
-          }
-          return s;
-        });
-        localStorage.setItem('vdl_seats', JSON.stringify(updatedSeats));
+            return s;
+          });
+          localStorage.setItem('vdl_seats', JSON.stringify(updatedSeats));
+        }
       }
-    }
 
-    if (isStudent) {
-      localStorage.setItem(`vdl_profile_${currentUser.id}`, JSON.stringify(finalFormData));
-      setIsProfileComplete(true);
-      window.dispatchEvent(new Event('profileUpdated')); // Notify other components
-      setIsSelfieModalOpen(true); // Open selfie popup after submission
-    } else {
-      alert("Student Details Added Successfully!");
+      if (isStudent) {
+        // Update local storage for student profile
+        localStorage.setItem(`vdl_profile_${currentUser.id}`, JSON.stringify(finalFormData));
+        setIsProfileComplete(true);
+        window.dispatchEvent(new Event('profileUpdated')); // Notify other components
+        alert('Profile updated successfully!');
+        setIsSelfieModalOpen(true); // Open selfie popup after submission
+      } else {
+        alert("Student Details Added Successfully!");
+      }
+    } catch (error) {
+      console.error('Error updating student:', error);
+      alert('Failed to update student details: ' + error.message);
     }
-    // TODO: Add API call here
   };
 
   const disableForm = isStudent && isProfileComplete;
@@ -181,26 +207,44 @@ const StudentDetails = () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      canvas.width = width;
+      canvas.height = height;
       const context = canvas.getContext('2d');
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.save();
+      context.scale(-1, 1);
+      context.drawImage(video, -width, 0, width, height);
+      context.restore();
       const imageData = canvas.toDataURL('image/png');
       setCapturedImage(imageData);
       stopCamera();
     }
   };
 
+  const getSelfieFileName = () => {
+    const id = vdlId || currentUser?.username || 'VDLID';
+    const safeName = (currentUser?.name || 'Student').trim().replace(/\s+/g, '_');
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `${id}_${safeName}_${timestamp}.png`;
+  };
+
   const saveSelfie = () => {
     if (!capturedImage) return;
+    const selfieFileName = getSelfieFileName();
+    const selfieImagePath = `studentimage/${selfieFileName}`;
+
     setSelfieImage(capturedImage);
 
     const savedProfile = JSON.parse(localStorage.getItem(`vdl_profile_${currentUser.id}`) || '{}');
     savedProfile.selfieImage = capturedImage;
+    savedProfile.selfieImageName = selfieFileName;
+    savedProfile.selfieImagePath = selfieImagePath;
     localStorage.setItem(`vdl_profile_${currentUser.id}`, JSON.stringify(savedProfile));
 
-    // TODO: Send API request to save the image in 'student/setudentimage' folder
-    console.log("Saving actual image data to 'student/studentImage' directory...");
+    console.log(`Saved selfie metadata: ${selfieImagePath}`);
 
     setIsSelfieModalOpen(false);
     navigate('/identityCards');
@@ -239,7 +283,16 @@ const StudentDetails = () => {
           </div>
           <div className="form-group">
             <label>Email</label>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="john.doe@example.com" disabled={disableForm || prefilledFields.email} />
+            <input 
+              type="email" 
+              name="email" 
+              value={formData.email} 
+              onChange={handleChange} 
+              required 
+              placeholder="john.doe@example.com" 
+              disabled={disableForm || (isStudent && prefilledFields.email)} 
+              title={isStudent && prefilledFields.email ? "Only VDL Management can update this field" : ""}
+            />
           </div>
           <div className="form-group">
             <label>Father's Name</label>
@@ -259,7 +312,18 @@ const StudentDetails = () => {
           </div>
           <div className="form-group">
             <label>Mobile Number</label>
-            <input type="tel" name="mobileNumber" value={formData.mobileNumber} onChange={handleChange} required placeholder="Enter 10-digit mobile number" maxLength="10" pattern="\d{10}" title="Please enter a 10-digit mobile number" disabled={disableForm || prefilledFields.mobile} />
+            <input 
+              type="tel" 
+              name="mobileNumber" 
+              value={formData.mobileNumber} 
+              onChange={handleChange} 
+              required 
+              placeholder="Enter 10-digit mobile number" 
+              maxLength="10" 
+              pattern="\d{10}" 
+              title={isStudent && prefilledFields.mobile ? "Only VDL Management can update this field" : "Please enter a 10-digit mobile number"} 
+              disabled={disableForm || (isStudent && prefilledFields.mobile)} 
+            />
           </div>
           <div className="form-group">
             <label>Alternate Number</label>

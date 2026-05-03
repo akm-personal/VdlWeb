@@ -62,14 +62,14 @@ export const shiftService = {
         startTime: shiftData.start,
         endTime: shiftData.end
       };
-      const response = await apiClient(`/Shifts/${shiftId}`, {
+      const response = await apiClient(`/Shifts/update/${shiftId}`, {
         method: 'PUT',
         body: JSON.stringify(transformedData)
       });
-      logApiCall('info', 'Updated shift', { endpoint: `/Shifts/${shiftId}`, request: transformedData, response });
+      logApiCall('info', 'Updated shift', { endpoint: `/Shifts/update/${shiftId}`, request: transformedData, response });
       return response;
     } catch (error) {
-      logApiCall('error', 'Update shift failed', { endpoint: `/Shifts/${shiftId}`, request: shiftData, error: error.message });
+      logApiCall('error', 'Update shift failed', { endpoint: `/Shifts/update/${shiftId}`, request: shiftData, error: error.message });
       throw error;
     }
   },

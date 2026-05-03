@@ -114,6 +114,8 @@ const ShiftManagement = () => {
 
     const hasOverlap = shifts.find(s => {
       if (s.id === viewingShift.id) return false;
+      if (s.isDeleted === 1 || s.isDeleted === true) return false;
+      if (s.status !== 'active' && s.status !== 1) return false;
       
       const existingIntervals = getIntervals(s.start, s.end);
       for (let [aStart, aEnd] of newIntervals) {
@@ -235,12 +237,25 @@ const ShiftManagement = () => {
 
     const endTime = formData.id ? formData.end : computeEndTime(formData.start, formData.duration);
 
-    if (!formData.id) {
-      const duplicateTime = shifts.find(s => s.start === formData.start && s.end === endTime);
-      if (duplicateTime) {
-        setError(`Shift timing overlaps with existing shift: ${duplicateTime.name}`);
-        return;
+    const newIntervals = getIntervals(formData.start, endTime);
+
+    const hasOverlap = shifts.find(s => {
+      if (formData.id && s.id === formData.id) return false;
+      if (s.isDeleted === 1 || s.isDeleted === true) return false;
+      if (s.status !== 'active' && s.status !== 1) return false;
+      
+      const existingIntervals = getIntervals(s.start, s.end);
+      for (let [aStart, aEnd] of newIntervals) {
+        for (let [bStart, bEnd] of existingIntervals) {
+          if (aStart < bEnd && bStart < aEnd) return true;
+        }
       }
+      return false;
+    });
+
+    if (hasOverlap) {
+      setError(`Shift timing overlaps with existing shift: ${hasOverlap.name}`);
+      return;
     }
 
     const apiPayload = {

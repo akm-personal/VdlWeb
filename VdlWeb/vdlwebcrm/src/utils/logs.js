@@ -28,6 +28,8 @@ const saveLogs = () => {
 
 const notifyListeners = () => {
   listeners.forEach(listener => listener([...logs])); // Pass a copy
+  // Notify any listeners in the same tab outside React components
+  window.dispatchEvent(new Event('vdl-logs-updated'));
 };
 
 export const logApiCall = (level, message, details = {}) => {
@@ -47,7 +49,7 @@ export const logApiCall = (level, message, details = {}) => {
 
 // Function to retrieve logs
 export const getLogs = () => {
-  return logs;
+  return [...logs];
 };
 
 // Function to subscribe to log updates

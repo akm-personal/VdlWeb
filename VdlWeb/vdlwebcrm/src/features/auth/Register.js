@@ -10,7 +10,8 @@ const Register = () => {
   const [formData, setFormData] = useState({
     name: '',
     roleId: 4,
-    emailOrMobile: '',
+    email: '',
+    mobileNumber: '',
     password: ''
   });
   const [error, setError] = useState('');
@@ -20,8 +21,8 @@ const Register = () => {
 
   const handleChange = (e) => {
     let value = e.target.value;
-    // Auto-format: allow only numbers and restrict to 10 digits for mobile
-    if (e.target.name === 'emailOrMobile' && regType === 'mobile') {
+
+    if (e.target.name === 'mobileNumber') {
       value = value.replace(/\D/g, '').slice(0, 10);
     }
 
@@ -39,8 +40,8 @@ const Register = () => {
     try {
       const registerData = {
         username: formData.name,
-        email: regType === 'email' ? formData.emailOrMobile : null,
-        mobileNumber: regType === 'mobile' ? formData.emailOrMobile : null,
+        email: regType === 'email' ? formData.email : null,
+        mobileNumber: regType === 'mobile' ? formData.mobileNumber : null,
         password: formData.password,
         roleId: formData.roleId,
       };
@@ -76,22 +77,36 @@ const Register = () => {
             
             <div style={{ display: 'flex', gap: '20px', margin: '10px 0', justifyContent: 'center', width: '100%' }}>
               <label style={{ fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <input type="radio" value="email" checked={regType === 'email'} onChange={(e) => setRegType(e.target.value)} style={{ margin: '0 5px 0 0', width: 'auto' }} /> Email
+                <input type="radio" value="email" checked={regType === 'email'} onChange={(e) => { setRegType(e.target.value); setFormData(prev => ({ ...prev, mobileNumber: '' })); }} style={{ margin: '0 5px 0 0', width: 'auto' }} /> Email
               </label>
               <label style={{ fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <input type="radio" value="mobile" checked={regType === 'mobile'} onChange={(e) => setRegType(e.target.value)} style={{ margin: '0 5px 0 0', width: 'auto' }} /> Mobile
+                <input type="radio" value="mobile" checked={regType === 'mobile'} onChange={(e) => { setRegType(e.target.value); setFormData(prev => ({ ...prev, email: '' })); }} style={{ margin: '0 5px 0 0', width: 'auto' }} /> Mobile
               </label>
             </div>
 
             <input
-              type={regType === 'email' ? 'email' : 'tel'}
-              name="emailOrMobile"
-              placeholder={regType === 'email' ? 'Email Address' : 'Mobile Number (10 digits)'}
-              value={formData.emailOrMobile}
+              type="email"
+              name="email"
+              placeholder="Email Address"
+              value={formData.email}
               onChange={handleChange}
-              required
+              required={regType === 'email'}
+              disabled={regType !== 'email'}
+              title={regType !== 'email' ? 'Email is disabled when Register by Mobile is selected' : 'Enter your email address'}
+              style={regType !== 'email' ? { backgroundColor: '#f5f5f5' } : {}}
+            />
+            <input
+              type="tel"
+              name="mobileNumber"
+              placeholder="Mobile Number (10 digits)"
+              value={formData.mobileNumber}
+              onChange={handleChange}
+              required={regType === 'mobile'}
+              disabled={regType !== 'mobile'}
+              maxLength="10"
               pattern={regType === 'mobile' ? '[0-9]{10}' : undefined}
-              title={regType === 'mobile' ? 'Please enter a valid 10-digit mobile number' : undefined}
+              title={regType !== 'mobile' ? 'Mobile number is disabled when Register by Email is selected' : 'Please enter a valid 10-digit mobile number'}
+              style={regType !== 'mobile' ? { backgroundColor: '#f5f5f5' } : {}}
             />
             <div style={{ position: 'relative', width: '100%', margin: '8px 0' }}>
               <input
