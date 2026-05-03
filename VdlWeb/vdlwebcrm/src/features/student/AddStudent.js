@@ -229,26 +229,44 @@ const AddStudent = () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      canvas.width = width;
+      canvas.height = height;
       const context = canvas.getContext('2d');
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.save();
+      context.scale(-1, 1);
+      context.drawImage(video, -width, 0, width, height);
+      context.restore();
       const imageData = canvas.toDataURL('image/png');
       setCapturedImage(imageData);
       stopCamera();
     }
   };
 
+  const getSelfieFileName = () => {
+    const id = vdlId || currentUser?.username || 'VDLID';
+    const safeName = (currentUser?.name || 'Student').trim().replace(/\s+/g, '_');
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `${id}_${safeName}_${timestamp}.png`;
+  };
+
   const saveSelfie = () => {
     if (!capturedImage) return;
+    const selfieFileName = getSelfieFileName();
+    const selfieImagePath = `studentimage/${selfieFileName}`;
+
     setSelfieImage(capturedImage);
 
     const savedProfile = JSON.parse(localStorage.getItem(`vdl_profile_${currentUser.id}`) || '{}');
     savedProfile.selfieImage = capturedImage;
+    savedProfile.selfieImageName = selfieFileName;
+    savedProfile.selfieImagePath = selfieImagePath;
     localStorage.setItem(`vdl_profile_${currentUser.id}`, JSON.stringify(savedProfile));
 
-    // TODO: Send API request to save the image in 'student/setudentimage' folder
-    console.log("Saving actual image data to 'student/studentImage' directory...");
+    console.log(`Saved selfie metadata: ${selfieImagePath}`);
 
     setIsSelfieModalOpen(false);
     navigate('/identityCards');
@@ -429,7 +447,7 @@ const AddStudent = () => {
             <div className="modal-body">
               <p style={{ color: '#e74c3c', fontWeight: 'bold', marginBottom: '20px' }}>Note: Yeh image aapke identity card pe show hoga.</p>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '15px' }}>
-                <button type="button" onClick={handleTakeSelfie} className="btn-primary-action" style={{ width: 'auto', padding: '10px 20px' }}>📸 Capture Selfie</button>
+                <button type="button" className="btn-primary-action" style={{ width: 'auto', padding: '10px 20px' }}>📸 Capture Selfie</button>
                 <button type="button" onClick={() => setIsSelfieModalOpen(false)} className="btn-remove-seat" style={{ width: 'auto', padding: '10px 20px' }}>Skip / Close</button>
               </div>
             </div>
