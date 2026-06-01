@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { dummyUsers } from '../../utils/dummyDatabase';
 import '../../styles/Users.css';
+import Pagination from '../../components/Pagination';
 
 const Users = () => {
   const [viewMode, setViewMode] = useState('form'); // 'form' or 'table'
@@ -19,6 +20,10 @@ const Users = () => {
   const [pwdData, setPwdData] = useState({ newPassword: '', confirmPassword: '' });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [editUserData, setEditUserData] = useState({ role: '', status: '' });
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
@@ -70,6 +75,17 @@ const Users = () => {
     setTimeout(() => {
       setToast(prev => ({ ...prev, show: false }));
     }, 3000); // auto close after 3 seconds
+  };
+
+  // Pagination calculations
+  const indexOfLastItem = itemsPerPage === 'All' ? users.length : currentPage * itemsPerPage;
+  const indexOfFirstItem = itemsPerPage === 'All' ? 0 : indexOfLastItem - itemsPerPage;
+  const currentUsers = users.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handleItemsPerPageChange = (e) => {
+    const val = e.target.value;
+    setItemsPerPage(val === 'All' ? 'All' : Number(val));
+    setCurrentPage(1); // Reset to first page
   };
 
   return (
@@ -127,7 +143,7 @@ const Users = () => {
                 </tr>
               </thead>
               <tbody>
-                {users.map(user => (
+                {currentUsers.map(user => (
                   <tr key={user.id}>
                     <td>{user.id}</td>
                     <td>{user.vdlId}</td>
@@ -140,6 +156,14 @@ const Users = () => {
                 ))}
               </tbody>
             </table>
+            
+            <Pagination 
+              totalItems={users.length} 
+              itemsPerPage={itemsPerPage} 
+              currentPage={currentPage} 
+              onPageChange={setCurrentPage} 
+              onItemsPerPageChange={handleItemsPerPageChange} 
+            />
           </div>
         </div>
       )}

@@ -1,10 +1,22 @@
 import { logApiCall } from '../utils/logs';
 
-const BASE_URL = 'https://scaling-happiness-q7r4xgwvq669h4p7r-5000.app.github.dev/api';
+//const BASE_URL = 'https://scaling-happiness-q7r4xgwvq669h4p7r-5000.app.github.dev/api';
+const BASE_URL = '/api';
 
 export const apiClient = async (endpoint, options = {}) => {
   // Fallback support for multiple keys if your auth stores them differently
-  const token = localStorage.getItem('token') || localStorage.getItem('jwt_token');
+  let token = localStorage.getItem('authToken') || localStorage.getItem('token') || localStorage.getItem('jwt_token');
+  
+  // Strictly sanitize the token to prevent 401 Unauthorized errors
+  if (token === 'null' || token === 'undefined') {
+    token = null;
+  } else if (token) {
+    token = token.replace(/^"|"$/g, '').trim();
+    if (token.toLowerCase().startsWith('bearer ')) {
+      token = token.slice(7).trim();
+    }
+  }
+
   const url = `${BASE_URL}${endpoint}`;
   const method = options.method || 'GET';
 
@@ -18,11 +30,20 @@ export const apiClient = async (endpoint, options = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const requestBody = (() => {
+    if (!options.body) return undefined;
+    try {
+      return JSON.parse(options.body);
+    } catch (err) {
+      return options.body;
+    }
+  })();
+
   // 1. Automatically Log outgoing request
   logApiCall('INFO', `Request: ${method} ${url}`, {
     method,
     headers: { ...headers, Authorization: token ? 'Bearer [HIDDEN]' : undefined },
-    body: options.body ? JSON.parse(options.body) : undefined
+    body: requestBody
   });
 
   try {
@@ -32,10 +53,16 @@ export const apiClient = async (endpoint, options = {}) => {
     if (response.status === 401) {
       logApiCall('ERROR', `Response: ${method} ${url} - 401 Unauthorized`);
       alert('Your session has expired or token is invalid. Please login again.');
+      localStorage.removeItem('authToken');
       localStorage.removeItem('token');
       localStorage.removeItem('jwt_token');
       window.location.href = '/auth/login';
       throw new Error('Unauthorized session.');
+    }
+
+    if (response.status === 403) {
+      logApiCall('ERROR', `Response: ${method} ${url} - 403 Forbidden`, { responseData: await response.text() });
+      throw new Error('Permission denied. Please contact your administrator.');
     }
 
     const contentType = response.headers.get("content-type");
@@ -60,7 +87,8 @@ export const apiClient = async (endpoint, options = {}) => {
 
 // Specific API functions
 export const updateStudent = async (vdlId, studentData) => {
-  return apiClient(`/Student/${vdlId}`, {
+  const safeVdlId = encodeURIComponent(vdlId);
+  return apiClient(`/Student/update/${safeVdlId}`, {
     method: 'PUT',
     body: JSON.stringify(studentData)
   });

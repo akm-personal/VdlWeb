@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "start": "cd VdlWeb/vdlwebcrm && npm install && npm start",
+    "build": "cd VdlWeb/vdlwebcrm && npm install && npm run build"
+  },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.2.0"
   }

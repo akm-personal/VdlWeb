@@ -91,6 +91,10 @@ const Sidebar = ({ collapsed }) => {
           <span className="icon">🔄</span>
           <span className="nav-text">Application Flow</span>
         </Link>
+        <Link to="/search" className="nav-link">
+          <span className="icon">🔍</span>
+          <span className="nav-text">Search</span>
+        </Link>
       </nav>
     </aside>
   );

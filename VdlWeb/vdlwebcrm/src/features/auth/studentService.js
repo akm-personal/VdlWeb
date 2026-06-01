@@ -4,14 +4,14 @@ import { logApiCall } from '../../utils/logs';
 export const studentService = {
   getStudentByVdlId: async (vdlId) => {
     try {
-      const data = await apiClient(`/Student/${vdlId}`, {
+      const data = await apiClient(`/student/details/${vdlId}`, {
         method: 'GET',
       });
       
-      logApiCall('info', 'Fetch student details successful', { endpoint: `/Student/${vdlId}`, response: data });
+      logApiCall('info', 'Fetch student details successful', { endpoint: `/student/details/${vdlId}`, response: data });
       return data;
     } catch (error) {
-      logApiCall('error', 'Fetch student details failed', { endpoint: `/Student/${vdlId}`, error: error.message });
+      logApiCall('error', 'Fetch student details failed', { endpoint: `/student/details/${vdlId}`, error: error.message });
       throw error;
     }
   },

@@ -88,6 +88,26 @@
 .status-badge.done, .status-badge.fully-booked, .status-badge.paid, .status-badge.active { background-color: var(--success-color); }
 .status-badge.upcoming, .status-badge.partially-booked { background-color: var(--warning-color); color: #333; }
 
+/* Custom Date Input Styling */
+.custom-date-input {
+  cursor: pointer;
+}
+
+.custom-date-input:disabled {
+  cursor: not-allowed;
+}
+
+.custom-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.custom-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
 .student-details-grid p { margin: 10px 0; font-size: 14px; color: var(--text-main); border-bottom: 1px dashed #eee; padding-bottom: 8px; }
 .student-details-grid p:last-child { border-bottom: none; }
 
@@ -99,4 +119,39 @@
   .student-form-container {
     padding: 20px;
   }
+}
+
+/* Fee History Expandable Rows */
+.fee-parent-row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.fee-parent-row:hover {
+  background-color: #e8f4f8 !important;
+}
+
+.fee-child-row {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fee-parent-row td:first-child {
+  text-align: center;
+  user-select: none;
+  cursor: pointer;
+}
+
+.fee-child-row td:first-child {
+  cursor: default;
 }

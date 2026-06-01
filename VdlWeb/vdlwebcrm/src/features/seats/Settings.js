@@ -12,6 +12,19 @@ const FEATURES = [
   { key: 'show_shift_dots', name: 'Show Shift Dots on Seats' }
 ];
 
+const SYSTEM_STATUSES = [
+  { Id: 1, StatusId: 1, StatusName: 'Pending', StatusType: 'Fee' },
+  { Id: 2, StatusId: 2, StatusName: 'Partial', StatusType: 'Fee' },
+  { Id: 3, StatusId: 3, StatusName: 'Paid', StatusType: 'Fee' },
+  { Id: 4, StatusId: 4, StatusName: 'Active', StatusType: 'General' },
+  { Id: 5, StatusId: 5, StatusName: 'Not Active', StatusType: 'General' },
+  { Id: 6, StatusId: 6, StatusName: 'Active', StatusType: 'Student' },
+  { Id: 7, StatusId: 7, StatusName: 'Not Active', StatusType: 'Student' },
+  { Id: 8, StatusId: 8, StatusName: 'Dropped', StatusType: 'Student' },
+  { Id: 9, StatusId: 9, StatusName: 'Cancelled', StatusType: 'Student' },
+  { Id: 10, StatusId: 10, StatusName: 'Self', StatusType: 'Users' }
+];
+
 const getRoleId = (roleName) => {
   if (!roleName) return ROLES.STUDENT;
   const r = String(roleName).toLowerCase();
@@ -34,6 +47,8 @@ const Settings = () => {
   const [editStatus, setEditStatus] = useState('on');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
+  
+  const [selectedStatusType, setSelectedStatusType] = useState('All');
 
   const openEditModal = (feature) => {
     setSelectedFeature(feature);
@@ -114,6 +129,11 @@ const Settings = () => {
       return hasPermission(userWithRole, featureKey);
     });
   };
+  
+  const statusTypes = [...new Set(SYSTEM_STATUSES.map(s => s.StatusType))];
+  const filteredStatuses = selectedStatusType === 'All' 
+    ? SYSTEM_STATUSES 
+    : SYSTEM_STATUSES.filter(s => s.StatusType === selectedStatusType);
 
   return (
     <div className="settings-page">
@@ -121,38 +141,81 @@ const Settings = () => {
         <h2>System Settings & Permissions</h2>
       </div>
 
-      <div className="table-responsive" style={{ background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
-        <table className="user-table">
-          <thead>
-            <tr>
-              <th>Setting Name</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {FEATURES.map(feature => {
-              const setting = settingsList.find(s => s.id === feature.key);
-              const status = setting ? setting.status : 'on';
-              return (
-                <tr key={feature.key}>
-                  <td style={{ fontWeight: 'bold' }}>{feature.name}</td>
-                  <td>
-                    <span className={`status-badge ${status === 'on' ? 'fully-booked' : 'locked'}`}>
-                      {status.toUpperCase()}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button className="btn-primary-action" style={{ background: '#3498db', padding: '6px 12px', width: 'auto' }} onClick={() => openViewModal(feature)}>View</button>
-                      <button className="btn-primary-action" style={{ padding: '6px 12px', width: 'auto' }} onClick={() => openEditModal(feature)}>Change Setting</button>
-                    </div>
-                  </td>
+      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {/* Left Side: Feature Permissions */}
+        <div className="table-responsive" style={{ flex: '2 1 500px', background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+          <h3 style={{ marginBottom: '15px', color: '#2c3e50', fontSize: '18px' }}>Feature Permissions</h3>
+          <table className="user-table">
+            <thead>
+              <tr>
+                <th>Setting Name</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {FEATURES.map(feature => {
+                const setting = settingsList.find(s => s.id === feature.key);
+                const status = setting ? setting.status : 'on';
+                return (
+                  <tr key={feature.key}>
+                    <td style={{ fontWeight: 'bold' }}>{feature.name}</td>
+                    <td>
+                      <span className={`status-badge ${status === 'on' ? 'fully-booked' : 'locked'}`}>
+                        {status.toUpperCase()}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn-primary-action" style={{ background: '#3498db', padding: '6px 12px', width: 'auto' }} onClick={() => openViewModal(feature)}>View</button>
+                        <button className="btn-primary-action" style={{ padding: '6px 12px', width: 'auto' }} onClick={() => openEditModal(feature)}>Change Setting</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Right Side: System Statuses Reference */}
+        <div style={{ flex: '1 1 300px', maxWidth: '400px', background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+          <h3 style={{ marginBottom: '15px', color: '#2c3e50', fontSize: '18px' }}>System Statuses Reference</h3>
+          <div className="form-group full-width" style={{ marginBottom: '15px' }}>
+            <label>Filter by Status Type:</label>
+            <select 
+              value={selectedStatusType} 
+              onChange={(e) => setSelectedStatusType(e.target.value)} 
+              style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid #ccc', width: '100%', outline: 'none' }}
+            >
+              <option value="All">All Statuses</option>
+              {statusTypes.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+          <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #eee', borderRadius: '6px' }}>
+            <table className="user-table" style={{ margin: 0, fontSize: '13px' }}>
+              <thead>
+                <tr>
+                  <th>Status Id</th>                  
+                  <th> Status Type</th>
+                  <th>Status Name</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {filteredStatuses.map(status => (
+                  <tr key={status.Id}>
+                    <td style={{ fontWeight: 'bold' }}>{status.StatusId}</td>
+                    <td className="text-muted">{status.StatusType}</td>
+                      <td><span className="status-badge fully-booked" style={{ background: '#ecf0f1', color: '#333' }}>{status.StatusName}</span></td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Edit Modal */}

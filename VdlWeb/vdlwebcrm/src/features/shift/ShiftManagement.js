@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import '../../styles/ShiftManagement.css';
 import { formatTime12Hour } from '../../utils/helpers';
+import Pagination from '../../components/Pagination';
 import { shiftService } from './shiftService';
 
 const ShiftManagement = () => {
@@ -26,6 +27,10 @@ const ShiftManagement = () => {
     startTime: '',
     endTime: ''
   });
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const computeEndTime = (start, duration) => {
     const [hourStr, minuteStr] = start.split(':');
@@ -293,6 +298,17 @@ const ShiftManagement = () => {
     }
   };
 
+  // Pagination calculations
+  const indexOfLastItem = itemsPerPage === 'All' ? shifts.length : currentPage * itemsPerPage;
+  const indexOfFirstItem = itemsPerPage === 'All' ? indexOfLastItem - itemsPerPage : 0;
+  const currentShifts = shifts.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handleItemsPerPageChange = (e) => {
+    const val = e.target.value;
+    setItemsPerPage(val === 'All' ? 'All' : Number(val));
+    setCurrentPage(1); // Reset to first page
+  };
+
   return (
     <div className="shift-page">
       {successMessage && (
@@ -332,7 +348,7 @@ const ShiftManagement = () => {
             </tr>
           </thead>
           <tbody>
-            {shifts.map((shift, index) => (
+            {currentShifts.map((shift, index) => (
               <tr key={shift.id}>
                 <td>{index + 1}</td>
                 <td style={{ fontWeight: 'bold' }}>{shift.name}</td>
@@ -355,11 +371,19 @@ const ShiftManagement = () => {
                 </td>
               </tr>
             ))}
-            {shifts.length === 0 && (
+            {currentShifts.length === 0 && (
               <tr><td colSpan="6" style={{ textAlign: 'center' }}>No shifts available. Create one to get started.</td></tr>
             )}
           </tbody>
         </table>
+
+        <Pagination 
+          totalItems={shifts.length} 
+          itemsPerPage={itemsPerPage} 
+          currentPage={currentPage} 
+          onPageChange={setCurrentPage} 
+          onItemsPerPageChange={handleItemsPerPageChange} 
+        />
       </div>
 
       {viewingShift && (

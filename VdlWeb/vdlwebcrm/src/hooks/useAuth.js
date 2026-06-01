@@ -30,6 +30,8 @@ export function AuthProvider({ children }) {
   const login = async (credentials) => {
     const response = await authService.login(credentials);
     localStorage.setItem('authToken', response.token);
+    localStorage.setItem('token', response.token);
+    localStorage.setItem('jwt_token', response.token);
     setUser(response.user);
     setIsAuthenticated(true);
     return response;
@@ -38,6 +40,8 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     await authService.logout();
     localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('jwt_token');
     setUser(null);
     setIsAuthenticated(false);
   };

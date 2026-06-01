@@ -6,6 +6,7 @@ import '../../styles/Student.css';
 import '../../styles/SeatManagement.css';
 import { apiClient } from '../../services/apis';
 import SeatSelectionModal from '../../components/SeatSelectionModal';
+import { useActiveShifts } from '../../hooks/useShifts';
 
 const AddStudent = () => {
   const currentUser = getCurrentUser();
@@ -27,10 +28,7 @@ const AddStudent = () => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
 
-  // Dummy data for shifts (replace with API call)
-  const dummyShifts = [{ id: 1, name: 'Morning', status: 'active' }, { id: 2, name: 'Afternoon', status: 'active' }];
-  const activeShifts = dummyShifts.filter(s => s.status === 'active');
-  const defaultShiftId = activeShifts.length > 0 ? String(activeShifts[0].id) : '1'; // Default to '1' if no active shifts
+  const { activeShifts, formatTime } = useActiveShifts();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -43,7 +41,7 @@ const AddStudent = () => {
     alternateNumber: '',
     studentClass: '',
     idProof: '',
-    shiftType: defaultShiftId,
+    shiftType: '',
     seatNumber: '',
     studentStatus: 'Active'
   });
@@ -190,7 +188,7 @@ const AddStudent = () => {
         setFormData({
           name: '', email: '', fatherName: '', dateOfBirth: '', gender: 'Male', address: '',
           mobileNumber: '', alternateNumber: '', studentClass: '', idProof: '',
-          shiftType: defaultShiftId, seatNumber: '', studentStatus: 'Active'
+          shiftType: '', seatNumber: '', studentStatus: 'Active'
         });
       }
     } catch (error) {
@@ -349,11 +347,17 @@ const AddStudent = () => {
           <div className="form-group">
             <label>Shift Type</label>
             <select name="shiftType" value={formData.shiftType} onChange={handleChange} disabled={disableForm}>
-              {activeShifts.map(shift => (
-                <option key={shift.id} value={String(shift.id)}>{shift.name}</option>
-              ))}
-              {['Morning', 'Afternoon', 'Evening'].includes(formData.shiftType) && (
-                <option value={formData.shiftType}>{formData.shiftType}</option>
+              <option value="">Select Shift</option>
+              {activeShifts.map(shift => {
+                const isMatchedShift = formData.shiftType === String(shift.id);
+                return (
+                <option key={shift.id} value={String(shift.id)} style={{ fontWeight: isMatchedShift ? 'bold' : 'normal' }}>
+                  {shift.name} ({formatTime(shift.start)} - {formatTime(shift.end)})
+                </option>
+                );
+              })}
+              {['Morning', 'Afternoon', 'Evening'].includes(formData.shiftType) && !activeShifts.some(s => String(s.id) === formData.shiftType) && (
+                <option value={formData.shiftType} style={{ fontWeight: 'bold' }}>{formData.shiftType}</option>
               )}
             </select>
           </div>

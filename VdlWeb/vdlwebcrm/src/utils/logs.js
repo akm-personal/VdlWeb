@@ -27,10 +27,23 @@ const saveLogs = () => {
 };
 
 const notifyListeners = () => {
-  listeners.forEach(listener => listener([...logs])); // Pass a copy
+  const currentLogs = [...logs];
+  listeners.forEach(listener => listener(currentLogs)); // Pass a copy
   // Notify any listeners in the same tab outside React components
   window.dispatchEvent(new Event('vdl-logs-updated'));
 };
+
+// Listen for log updates from other tabs
+window.addEventListener('storage', (e) => {
+  if (e.key === LOG_STORAGE_KEY) {
+    try {
+      logs = e.newValue ? JSON.parse(e.newValue) : [];
+      notifyListeners();
+    } catch (err) {
+      console.error("Failed to parse logs from storage event:", err);
+    }
+  }
+});
 
 export const logApiCall = (level, message, details = {}) => {
   const timestamp = new Date().toISOString();
@@ -42,6 +55,13 @@ export const logApiCall = (level, message, details = {}) => {
   };
 
   console.log(`[${logEntry.timestamp}] [${logEntry.level}] ${logEntry.message}`, logEntry);
+  
+  // Sync with latest localStorage to avoid overwriting logs from other tabs
+  try {
+    const stored = localStorage.getItem(LOG_STORAGE_KEY);
+    if (stored) logs = JSON.parse(stored);
+  } catch (e) {}
+
   logs.push(logEntry);
   saveLogs(); // Save after each new log
   notifyListeners(); // Notify listeners
@@ -49,6 +69,14 @@ export const logApiCall = (level, message, details = {}) => {
 
 // Function to retrieve logs
 export const getLogs = () => {
+  try {
+    const storedLogs = localStorage.getItem(LOG_STORAGE_KEY);
+    if (storedLogs) {
+      logs = JSON.parse(storedLogs);
+    }
+  } catch (e) {
+    console.error("Failed to parse logs from localStorage:", e);
+  }
   return [...logs];
 };
 
@@ -56,7 +84,7 @@ export const getLogs = () => {
 export const subscribeToLogs = (callback) => {
   listeners.push(callback);
   // Immediately provide current logs to new subscriber
-  callback([...logs]); // Pass a copy
+  callback(getLogs()); // Pass a fresh copy from storage
   return () => {
     // Return an unsubscribe function
     listeners = listeners.filter(listener => listener !== callback);

@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { seatDummyStudents, shifts as dbShifts, settings as dbSettings } from '../../utils/dummyDatabase';
+import { settings as dbSettings } from '../../utils/dummyDatabase';
 import '../../styles/SeatManagement.css';
 import { formatTime12Hour, formatDate, formatDateTime } from '../../utils/helpers';
 import { getCurrentUser, hasPermission } from '../../utils/rbac';
+import { updateStudent, apiClient } from '../../services/apis';
+import { getLayout, createRow, updateRow, deleteRow, createSeat, updateSeat, deleteSeat, createAssignment, deleteAssignment } from '../../services/seatManagementService';
+import { useActiveShifts } from '../../hooks/useShifts';
+import { useAllStudents } from '../../hooks/useStudents';
 
 const generateShiftCombinations = (shiftsList) => {
   const results = [];
@@ -35,53 +39,30 @@ const generateShiftCombinations = (shiftsList) => {
   return results;
 };
 
-const generateSeats = () => {
-  const stored = localStorage.getItem('vdl_seats');
-  if (stored) return JSON.parse(stored);
-  const seats = [];
-  let idCounter = 1;
-  for (let r = 1; r <= 4; r++) {
-    for (let n = 1; n <= 20; n++) {
-      let seatNumber = (r - 1) * 20 + n;
-      const defaultShifts = {};
-      dbShifts.forEach(shift => {
-        defaultShifts[shift.id] = { status: 'available', student: null };
-      });
-      seats.push({
-        id: idCounter++, row: r, number: seatNumber, locked: false,
-        shifts: defaultShifts
-      });
-    }
-  }
-  if (seatDummyStudents.length > 0 && seats.length > 0) {
-    if (seats[0].shifts['1']) seats[0].shifts['1'] = { status: 'booked', student: seatDummyStudents[0] };
-    if (seats[0].shifts['2']) seats[0].shifts['2'] = { status: 'booked', student: seatDummyStudents[0] };
-    if (seats[1].shifts['3']) seats[1].shifts['3'] = { status: 'pending', student: seatDummyStudents[1] };
-    if (seats[2].shifts['1']) seats[2].shifts['1'] = { status: 'booked', student: seatDummyStudents[2] };
-  }
-  localStorage.setItem('vdl_seats', JSON.stringify(seats));
-  return seats;
-};
-
 const SeatManagement = () => {
-  const [seats, setSeats] = useState(generateSeats);
-  const [history, setHistory] = useState([]);
-  const [redoHistory, setRedoHistory] = useState([]);
-  const isUndoRedoEnabled = dbSettings.find(s => s.id === 'enable_undo_redo')?.status === 'on';
+  const [seats, setSeats] = useState([]);
   const showShiftDotsEnabled = dbSettings.find(s => s.id === 'show_shift_dots')?.status !== 'off';
 
   const [selectedSeatId, setSelectedSeatId] = useState(null);
   const [selectedRow, setSelectedRow] = useState(null);
   const [rowLocks, setRowLocks] = useState({});
   const [rowNames, setRowNames] = useState({});
+  const [layoutRows, setLayoutRows] = useState([]);
   const [filter, setFilter] = useState('All');
 
-  const activeShifts = dbShifts.filter(s => s.status === 'active');
+  const { activeShifts } = useActiveShifts();
   const shiftOptions = generateShiftCombinations(activeShifts);
   const defaultFilter = shiftOptions.length > 0 ? shiftOptions[0].id : '';
 
   const [activeShiftFilter, setActiveShiftFilter] = useState(defaultFilter);
   const [assignShiftFilter, setAssignShiftFilter] = useState(defaultFilter);
+
+  useEffect(() => {
+    if (shiftOptions.length > 0 && (!activeShiftFilter || !shiftOptions.find(o => o.id === activeShiftFilter))) {
+      setActiveShiftFilter(shiftOptions[0].id);
+      setAssignShiftFilter(shiftOptions[0].id);
+    }
+  }, [shiftOptions, activeShiftFilter]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isShiftStudentsModalOpen, setIsShiftStudentsModalOpen] = useState(false);
@@ -102,26 +83,106 @@ const SeatManagement = () => {
   const canBulkAssign = hasPermission(currentUser, 'bulk_assign');
   const canAddRow = hasPermission(currentUser, 'add_new_row');
 
+  const { students: allStudents } = useAllStudents();
+
   useEffect(() => {
-    localStorage.setItem('vdl_seats', JSON.stringify(seats));
-  }, [seats]);
+    fetchLayoutData();
+  }, []);
+
+  const fetchLayoutData = async () => {
+    try {
+      const data = await getLayout();
+      let fetchedSeats = [];
+      let fetchedRows = [];
+      
+      // Handle response structure { data: [...] } or direct array
+      const layoutData = data.data || data;
+      
+      if (Array.isArray(layoutData)) {
+        fetchedRows = layoutData;
+        layoutData.forEach(row => {
+          if (row.seats && Array.isArray(row.seats)) {
+            row.seats.forEach(seat => {
+              // Extract numeric seat order securely from "R1-01" label
+              let seatNum = seat.seatOrder || seat.number || 0;
+              if (seat.seatLabel && seat.seatLabel.includes('-')) {
+                const parts = seat.seatLabel.split('-');
+                seatNum = parseInt(parts[parts.length - 1], 10);
+              }
+
+              // Map assignments securely to frontend shifts standard
+              const mappedShifts = seat.shifts || {};
+              if (seat.assignments && Array.isArray(seat.assignments)) {
+                seat.assignments.forEach(assignment => {
+                  mappedShifts[String(assignment.shiftId)] = {
+                    id: assignment.assignmentId || assignment.id,
+                    status: assignment.status || 'booked',
+                    student: assignment.student || { 
+                      id: assignment.studentId, 
+                      name: assignment.studentName || 'Assigned', 
+                      vdlId: assignment.vdlId,
+                      feeStatus: assignment.feeStatus || 'Paid'
+                    }
+                  };
+                });
+              }
+
+              fetchedSeats.push({ 
+                ...seat, 
+                id: seat.seatId || seat.id,
+                row: row.rowId || row.id, 
+                rowId: row.rowId || row.id,
+                number: seatNum,
+                locked: seat.isLocked !== undefined ? seat.isLocked : seat.locked,
+                shifts: mappedShifts
+              });
+            });
+          }
+        });
+      }
+
+      // Strictly sequence seats using their derived 'number'
+      setSeats(fetchedSeats.sort((a, b) => a.number - b.number));
+
+      if (fetchedRows && Array.isArray(fetchedRows) && fetchedRows.length > 0) {
+        const rl = {};
+        const rn = {};
+        const lr = [];
+        fetchedRows.forEach(r => {
+          const rNum = Number(r.rowId || r.row || r.id);
+          if (!isNaN(rNum)) {
+            rl[rNum] = r.isLocked || r.locked;
+            rn[rNum] = r.rowName || r.name;
+            if (!lr.includes(rNum)) lr.push(rNum);
+          }
+        });
+        setRowLocks(rl);
+        setRowNames(rn);
+        setLayoutRows(lr.sort((a, b) => a - b));
+      } else {
+        setLayoutRows([]); // Fallback to empty if DB has no layout
+      }
+    } catch (err) {
+      console.error("Failed to fetch layout data:", err);
+    }
+  };
 
   const selectedShifts = activeShiftFilter ? activeShiftFilter.split(',') : [];
 
   // Group seats by row
-  const maxRow = Math.max(...seats.map(s => s.row), 2);
-  const rows = Array.from({ length: maxRow }, (_, i) => i + 1);
+  const rows = layoutRows;
 
   const selectedSeat = seats.find(s => s.id === selectedSeatId);
 
   const getOccupancyStatus = (seat, shifts) => {
     if (seat.locked) return 'locked';
     let occupiedCount = 0;
+    const seatShifts = seat.shifts || {};
     for (const shift of shifts) {
       // Fallback to 'available' if dynamically removed
-      if (seat.shifts[shift] && seat.shifts[shift].status !== 'available') occupiedCount++;
+      if (seatShifts[shift] && seatShifts[shift].status !== 'available') occupiedCount++;
     }
-    if (occupiedCount === shifts.length) return 'fully-booked';
+    if (occupiedCount === shifts.length && shifts.length > 0) return 'fully-booked';
     if (occupiedCount > 0) return 'partially-booked';
     return 'available';
   };
@@ -137,159 +198,127 @@ const SeatManagement = () => {
     return rowNames[rowNum] !== undefined && rowNames[rowNum].trim() !== '' ? rowNames[rowNum] : `Row ${rowNum}`;
   };
 
-  const saveToHistory = () => {
-    setHistory(prev => [...prev.slice(-9), seats]); // Keep last 10 actions
-    setRedoHistory([]); // Clear redo history whenever a new action is performed
-  };
-
-  const handleUndo = () => {
-    if (history.length > 0) {
-      const previousState = history[history.length - 1];
-      
-      // Save current state to redo history
-      setRedoHistory(prev => [...prev, seats]);
-      
-      // Restore previous state but KEEP CURRENT data for any seat that is currently locked
-      const nextSeats = previousState.map(prevStateSeat => {
-        const currentSeat = seats.find(s => s.id === prevStateSeat.id);
-        if (currentSeat && currentSeat.locked) return currentSeat;
-        return prevStateSeat;
-      });
-
-      // Ensure newly added but locked seats aren't removed by Undo
-      seats.forEach(currentSeat => {
-        if (currentSeat.locked && !nextSeats.find(s => s.id === currentSeat.id)) {
-          nextSeats.push(currentSeat);
-        }
-      });
-
-      setSeats(nextSeats);
-      setHistory(prev => prev.slice(0, -1));
-      setSelectedSeatId(null);
-      setSelectedRow(null);
-    }
-  };
-
-  const handleRedo = () => {
-    if (redoHistory.length > 0) {
-      const nextState = redoHistory[redoHistory.length - 1];
-      
-      // Save current state back to undo history
-      setHistory(prev => [...prev.slice(-9), seats]);
-
-      const nextSeats = nextState.map(nextStateSeat => {
-        const currentSeat = seats.find(s => s.id === nextStateSeat.id);
-        if (currentSeat && currentSeat.locked) return currentSeat;
-        return nextStateSeat;
-      });
-
-      seats.forEach(currentSeat => {
-        if (currentSeat.locked && !nextSeats.find(s => s.id === currentSeat.id)) {
-          nextSeats.push(currentSeat);
-        }
-      });
-
-      setSeats(nextSeats);
-      setRedoHistory(prev => prev.slice(0, -1));
-      setSelectedSeatId(null);
-      setSelectedRow(null);
-    }
-  };
-
-  const handleAddSeat = (rowNum) => {
+  const handleAddSeat = async (rowNum) => {
     if (rowLocks[rowNum]) return;
     const rowSeats = seats.filter(s => s.row === rowNum);
     if (rowSeats.length >= 20) {
       alert('Maximum 20 seats allowed per row!');
       return;
     }
-    saveToHistory();
-    const baseNumber = (rowNum - 1) * 20;
-    const maxNumber = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.number)) : baseNumber;
-    const newId = Math.max(...seats.map(s => s.id), 0) + 1;
-    setSeats([...seats, { 
-      id: newId, row: rowNum, number: maxNumber + 1, locked: false,
-      shifts: dbShifts.reduce((acc, shift) => ({ ...acc, [shift.id]: { status: 'available', student: null } }), {})
-    }]);
+    try {
+      const baseNumber = (rowNum - 1) * 20;
+      const maxNumber = rowSeats.length > 0 ? Math.max(...rowSeats.map(s => s.number || 0)) : baseNumber;
+      const nextSeatNumber = maxNumber + 1;
+      const seatLabel = `R${rowNum}-${String(nextSeatNumber).padStart(2, '0')}`;
+      
+      await createSeat({ seatRowId: rowNum, seatLabel: seatLabel });
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Error adding seat: " + err.message);
+    }
   };
 
-  const handleAddRow = () => {
-    saveToHistory();
-    const newRow = maxRow + 1;
-    const startNumber = (newRow - 1) * 20 + 1;
-    setSeats([...seats, { 
-      id: Date.now(), row: newRow, number: startNumber, locked: false,
-      shifts: dbShifts.reduce((acc, shift) => ({ ...acc, [shift.id]: { status: 'available', student: null } }), {})
-    }]);
+  const handleAddRow = async () => {
+    try {
+      const newOrder = layoutRows.length > 0 ? Math.max(...layoutRows) + 1 : 1;
+      await createRow({ rowOrder: newOrder, rowName: `Row ${newOrder}`, name: `Row ${newOrder}` });
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Error adding row: " + err.message);
+    }
   };
 
-  const handleRemoveSeat = () => {
+  const handleRemoveSeat = async () => {
     if (!selectedSeat) return;
     if (selectedSeat.locked) return; // Action blocked if locked
-    saveToHistory();
-    setSeats(seats.filter(s => s.id !== selectedSeat.id));
-    setSelectedSeatId(null);
+    try {
+      await deleteSeat(selectedSeat.id);
+      setSelectedSeatId(null);
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Error removing seat: " + err.message);
+    }
   };
 
-  const handleRemoveRow = (rowNum) => {
+  const handleRemoveRow = async (rowNum) => {
     if (rowLocks[rowNum]) return; // Action blocked if locked
-    saveToHistory();
-    setSeats(seats.filter(s => s.row !== rowNum));
-    setSelectedRow(null);
+    try {
+      setLayoutRows(prev => prev.filter(r => r !== rowNum)); // Optimistic update
+      setSeats(prev => prev.filter(s => s.row !== rowNum));
+      await deleteRow(rowNum);
+      setSelectedRow(null);
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Error removing row: " + err.message);
+      await fetchLayoutData(); // Refresh to restore on failure
+    }
   };
 
-  const handleToggleSeatLock = () => {
+  const handleToggleSeatLock = async () => {
     if (!selectedSeat) return;
-    setSeats(seats.map(s => s.id === selectedSeat.id ? { ...s, locked: !s.locked } : s));
+    try {
+      await updateSeat(selectedSeat.id, { locked: !selectedSeat.locked, isLocked: !selectedSeat.locked });
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Error toggling seat lock: " + err.message);
+    }
   };
 
-  const handleToggleRowLock = (rowNum) => {
+  const handleToggleRowLock = async (rowNum) => {
     const isNowLocked = !rowLocks[rowNum];
-    setRowLocks(prev => ({ ...prev, [rowNum]: isNowLocked }));
-    
-    // Bulk Lock/Unlock all seats in this particular row
-    setSeats(prevSeats => prevSeats.map(s => 
-      s.row === rowNum ? { ...s, locked: isNowLocked } : s
-    ));
+    try {
+      await updateRow(rowNum, { isLocked: isNowLocked, locked: isNowLocked, name: rowNames[rowNum] });
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Error toggling row lock: " + err.message);
+    }
   };
 
-  const handleBulkLock = () => {
-    setSeats(seats.map(s => ({ ...s, locked: true })));
-    const newRowLocks = {};
-    rows.forEach(r => newRowLocks[r] = true);
-    setRowLocks(newRowLocks);
+  const handleRowRenameBlur = async (rowNum) => {
+    try {
+      await updateRow(rowNum, { name: rowNames[rowNum], isLocked: rowLocks[rowNum] });
+      await fetchLayoutData();
+    } catch (err) {
+      console.error("Failed to rename row", err);
+    }
   };
 
-  const handleBulkUnlock = () => {
-    setSeats(seats.map(s => ({ ...s, locked: false })));
-    const newRowLocks = {};
-    rows.forEach(r => newRowLocks[r] = false);
-    setRowLocks(newRowLocks);
+  const handleBulkLock = async () => {
+    try {
+      await Promise.all(seats.map(s => updateSeat(s.id, { locked: true, isLocked: true })));
+      await Promise.all(rows.map(r => updateRow(r, { isLocked: true, locked: true })));
+      await fetchLayoutData();
+    } catch (err) { alert("Failed to bulk lock."); }
   };
 
-  const handleAssignStudent = (student) => {
+  const handleBulkUnlock = async () => {
+    try {
+      await Promise.all(seats.map(s => updateSeat(s.id, { locked: false, isLocked: false })));
+      await Promise.all(rows.map(r => updateRow(r, { isLocked: false, locked: false })));
+      await fetchLayoutData();
+    } catch (err) { alert("Failed to bulk unlock."); }
+  };
+
+  const handleAssignStudent = async (student) => {
     if (!selectedSeat || selectedSeat.locked) return;
-    saveToHistory();
     const newStatus = student.feeStatus === 'Pending' ? 'pending' : 'booked';
     const shiftsToAssign = assignShiftFilter ? assignShiftFilter.split(',') : [];
     
-    const cannotAssign = shiftsToAssign.some(shift => selectedSeat.shifts[shift] && selectedSeat.shifts[shift].status !== 'available');
+    const cannotAssign = shiftsToAssign.some(shift => selectedSeat.shifts && selectedSeat.shifts[shift] && selectedSeat.shifts[shift].status !== 'available');
     if (cannotAssign) {
       alert("Selected shift(s) are already occupied for this seat.");
       return;
     }
     
-    setSeats(seats.map(s => {
-      if (s.id === selectedSeat.id) {
-        const updatedShifts = { ...s.shifts };
-        shiftsToAssign.forEach(shift => {
-          updatedShifts[shift] = { status: newStatus, student: student };
-        });
-        return { ...s, shifts: updatedShifts };
-      }
-      return s;
-    }));
-    setIsAssignModalOpen(false);
+    try {
+      await Promise.all(shiftsToAssign.map(shift => 
+        createAssignment({ seatId: selectedSeat.id, shiftId: shift, studentId: student.id, status: newStatus })
+      ));
+      setIsAssignModalOpen(false);
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Failed to assign student: " + err.message);
+    }
   };
 
   const openEditModal = (student) => {
@@ -314,41 +343,71 @@ const SeatManagement = () => {
     setEditFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (selectedSeat && selectedSeat.locked) return;
-    saveToHistory();
-    setSeats(seats.map(s => {
-      if (s.id === selectedSeat.id) {
-        const updatedShifts = { ...s.shifts };
-        selectedShifts.forEach(shift => {
-          if (updatedShifts[shift].student?.id === originalStudentId) {
-            updatedShifts[shift].student = { ...updatedShifts[shift].student, ...editFormData, id: studentToEdit };
-          }
-        });
-        return { ...s, shifts: updatedShifts };
-      }
-      return s;
-    }));
-    setIsEditModalOpen(false);
+    try {
+      await updateStudent(studentToEdit || originalStudentId, editFormData);
+      setIsEditModalOpen(false);
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Error updating student: " + err.message);
+    }
   };
 
-  const handleUnassignSeat = (studentId, specificShift = null) => {
-    if (!selectedSeat || selectedSeat.locked) return;
-    saveToHistory();
-    setSeats(seats.map(s => {
-      if (s.id === selectedSeat.id) {
-        const updatedShifts = { ...s.shifts };
-        const shiftsToClear = specificShift ? [specificShift] : selectedShifts;
-        shiftsToClear.forEach(shift => {
-          if (updatedShifts[shift].student?.id === studentId) {
-            updatedShifts[shift] = { status: 'available', student: null };
-          }
-        });
-        return { ...s, shifts: updatedShifts };
+  const handleUnassignSeat = async (studentId, specificShift = null) => {
+    if (!selectedSeat || selectedSeat.locked || !selectedSeat.shifts) return;
+    try {
+      const shiftsToClear = specificShift ? [specificShift] : selectedShifts;
+      const assignmentIds = shiftsToClear.map(shift => selectedSeat.shifts[shift] ? (selectedSeat.shifts[shift].id || selectedSeat.shifts[shift].assignmentId) : null).filter(Boolean);
+
+      if (assignmentIds.length > 0) {
+        await Promise.all(assignmentIds.map(id => deleteAssignment(id)));
+      } else {
+        await Promise.all(shiftsToClear.map(shift => deleteAssignment(`${selectedSeat.id}-${studentId}-${shift}`)));
       }
-      return s;
-    }));
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Failed to unassign student: " + err.message);
+    }
+  };
+
+  const handleToggleFeeHistory = async (shiftNum, student) => {
+    const isCurrentlyShown = showFeeHistory[shiftNum];
+    setShowFeeHistory(prev => ({ ...prev, [shiftNum]: !isCurrentlyShown }));
+    
+    if (!isCurrentlyShown) {
+      try {
+        const data = await apiClient(`/Fee/student/${student.vdlId}/records`);
+        const mappedHistory = data.map(record => {
+          const totalPaid = record.payments ? record.payments.reduce((sum, p) => sum + p.amountPaid, 0) : 0;
+          const lastPayment = record.payments && record.payments.length > 0 ? record.payments[record.payments.length - 1] : null;
+          return {
+            id: record.id,
+            date: lastPayment ? lastPayment.paymentDate : record.startDate,
+            startDate: record.startDate,
+            endDate: record.endDate,
+            amount: totalPaid,
+            dueAmount: record.totalFee - totalPaid,
+            status: record.status,
+            paymentMode: lastPayment ? lastPayment.paymentMode : 'N/A'
+          };
+        });
+        
+        setSeats(prevSeats => prevSeats.map(s => {
+          if (s.id === selectedSeatId) {
+            const updatedShifts = { ...s.shifts };
+            if (updatedShifts[shiftNum] && updatedShifts[shiftNum].student) {
+              updatedShifts[shiftNum].student = { ...updatedShifts[shiftNum].student, feeHistory: mappedHistory };
+            }
+            return { ...s, shifts: updatedShifts };
+          }
+          return s;
+        }));
+      } catch (err) {
+        console.error("Failed to fetch fee history", err);
+      }
+    }
   };
 
   const openFeeCollectionModal = () => {
@@ -390,57 +449,72 @@ const SeatManagement = () => {
     });
   };
 
-  const handleFeeCollectionSubmit = (e) => {
+  const handleFeeCollectionSubmit = async (e) => {
     e.preventDefault();
-    saveToHistory();
-    
-    const newHistoryEntry = {
-      date: new Date().toISOString(),
-      startDate: feeCollectionFormData.startDate,
-      endDate: feeCollectionFormData.endDate,
-      amount: feeCollectionFormData.collectedFee,
-      status: feeCollectionFormData.dueAmount > 0 ? 'Pending' : 'Paid',
-      collectedBy: feeCollectionFormData.collectedBy,
-      description: feeCollectionFormData.description,
-      totalFee: feeCollectionFormData.totalFee,
-      dueAmount: feeCollectionFormData.dueAmount
-    };
+    try {
+      const payload = {
+        vdlId: fullHistoryStudent.vdlId,
+        totalFee: parseFloat(feeCollectionFormData.totalFee) || 0,
+        collectedFee: parseFloat(feeCollectionFormData.collectedFee) || 0,
+        startDate: feeCollectionFormData.startDate,
+        endDate: feeCollectionFormData.endDate,
+        paymentMode: feeCollectionFormData.paymentMode || 'UPI',
+        description: feeCollectionFormData.description || 'Fee Payment',
+        paymentNote: feeCollectionFormData.description || 'Fee Payment'
+      };
 
-    const newFeeStatus = feeCollectionFormData.dueAmount > 0 ? 'Pending' : 'Paid';
-
-    setSeats(seats.map(s => {
-      const updatedShifts = { ...s.shifts };
-      let seatUpdated = false;
-      Object.keys(updatedShifts).forEach(shift => {
-        if (updatedShifts[shift].student?.id === fullHistoryStudent.id) {
-          updatedShifts[shift].student = { 
-            ...updatedShifts[shift].student, 
-            feeStatus: newFeeStatus,
-            feeHistory: [...(updatedShifts[shift].student.feeHistory || []), newHistoryEntry]
-          };
-          seatUpdated = true;
-        }
+      await apiClient('/Fee/record', {
+        method: 'POST',
+        body: JSON.stringify(payload)
       });
-      return seatUpdated ? { ...s, shifts: updatedShifts } : s;
-    }));
 
-    setFullHistoryStudent(prev => ({
-      ...prev,
-      feeStatus: newFeeStatus,
-      feeHistory: [...(prev.feeHistory || []), newHistoryEntry]
-    }));
+      const data = await apiClient(`/Fee/student/${fullHistoryStudent.vdlId}/records`);
+      const mappedHistory = data.map(record => {
+        const totalPaid = record.payments ? record.payments.reduce((sum, p) => sum + p.amountPaid, 0) : 0;
+        const lastPayment = record.payments && record.payments.length > 0 ? record.payments[record.payments.length - 1] : null;
+        return {
+          id: record.id, date: lastPayment ? lastPayment.paymentDate : record.startDate,
+          startDate: record.startDate, endDate: record.endDate, amount: totalPaid,
+          dueAmount: record.totalFee - totalPaid, status: record.status,
+          paymentMode: lastPayment ? lastPayment.paymentMode : 'N/A'
+        };
+      });
 
-    setIsFeeCollectionModalOpen(false);
+      setFullHistoryStudent(prev => ({
+        ...prev,
+        feeHistory: mappedHistory
+      }));
+
+      setIsFeeCollectionModalOpen(false);
+
+      setSeats(prevSeats => prevSeats.map(s => {
+        if (s.id === selectedSeatId) {
+          const newShifts = { ...s.shifts };
+          Object.keys(newShifts).forEach(sh => {
+            if (newShifts[sh]?.student?.vdlId === fullHistoryStudent.vdlId) {
+              newShifts[sh].student = { ...newShifts[sh].student, feeHistory: mappedHistory };
+            }
+          });
+          return { ...s, shifts: newShifts };
+        }
+        return s;
+      }));
+
+      await fetchLayoutData();
+    } catch (err) {
+      alert("Failed to collect fee: " + err.message);
+    }
   };
 
-  const filteredStudents = seatDummyStudents.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    String(s.vdlId).toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredStudents = allStudents.filter(s => 
+    (s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+    String(s.vdlId || s.id || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getShiftStudents = () => {
     const list = [];
     seats.forEach(seat => {
+      if (!seat.shifts) return;
       selectedShifts.forEach(shift => {
         const shiftData = seat.shifts[shift];
         if (shiftData && shiftData.student) {
@@ -487,24 +561,6 @@ const SeatManagement = () => {
                 disabled={!canBulkAssign}
                 style={{ opacity: canBulkAssign ? 1 : 0.5, cursor: canBulkAssign ? 'pointer' : 'not-allowed' }}
               >Bulk Assign</button>
-              {isUndoRedoEnabled && (
-                <>
-                  <button 
-                    className="btn-action undo-btn" 
-                    onClick={handleUndo} 
-                    disabled={history.length === 0}
-                  >
-                    ↶ Undo
-                  </button>
-                  <button 
-                    className="btn-action undo-btn" 
-                    onClick={handleRedo} 
-                    disabled={redoHistory.length === 0}
-                  >
-                    ↷ Redo
-                  </button>
-                </>
-              )}
             </>
           )}
         </div>
@@ -577,7 +633,7 @@ const SeatManagement = () => {
                       const shiftCount = activeShifts.length;
                       
                       const shiftDots = activeShifts.map((shift, index) => {
-                        const shiftData = seat.shifts[shift.id];
+                        const shiftData = seat.shifts ? seat.shifts[shift.id] : null;
                         const isOccupied = shiftData && shiftData.student;
                         const color = isOccupied ? '#2ecc71' : '#bdc3c7'; // Green or Gray
                         
@@ -680,9 +736,8 @@ const SeatManagement = () => {
               <div className="shifts-breakdown">
                 {activeShifts.map(shift => {
                   const shiftNum = String(shift.id);
-                  const shiftData = selectedSeat.shifts[shiftNum];
-                  if (!shiftData) return null;
-                  const isAvailable = !shiftData.student;
+                  const shiftData = selectedSeat.shifts ? selectedSeat.shifts[shiftNum] : null;
+                  const isAvailable = !shiftData || !shiftData.student || shiftData.status === 'available';
                   const statusClass = isAvailable ? 'available' : (shiftData.student.feeStatus === 'Pending' ? 'pending' : 'booked');
 
                   return (
@@ -692,21 +747,21 @@ const SeatManagement = () => {
                         <span className="shift-time">{formatTime12Hour(shift.start)} - {formatTime12Hour(shift.end)}</span>
                       </div>
                       <div className="shift-card-body">
-                        {!isAvailable ? (
+                        {!isAvailable && shiftData ? (
                           <div className="shift-occupied">
                             <p><strong>👤 Name:</strong> {shiftData.student.name}</p>
                           <p><strong>🆔 ID:</strong> {shiftData.student.vdlId}</p>
                             <p><strong>💰 Fee:</strong> <span className={`status-badge ${shiftData.status}`}>{shiftData.student.feeStatus}</span></p>
                             
                             <div className="fee-history-section">
-                              <button className="btn-toggle-history" onClick={() => setShowFeeHistory(prev => ({...prev, [shiftNum]: !prev[shiftNum]}))}>
+                              <button className="btn-toggle-history" onClick={() => handleToggleFeeHistory(shiftNum, shiftData.student)}>
                                 {showFeeHistory[shiftNum] ? 'Hide Fee History ▲' : 'Show Fee History ▼'}
                               </button>
                               {showFeeHistory[shiftNum] && (
                                 <ul className="fee-history-list">
                                   {shiftData.student.feeHistory && shiftData.student.feeHistory.length > 0 ? (
                                     <>
-                                      {shiftData.student.feeHistory.slice().reverse().slice(0, 3).map((entry, idx) => (
+                                    {shiftData.student.feeHistory.slice(0, 3).map((entry, idx) => (
                                 <li key={idx} className="fee-history-item">
                                   <div className="fee-history-item-header">
                                     <span>{entry.date ? formatDateTime(entry.date) : entry.date}</span>
@@ -783,6 +838,7 @@ const SeatManagement = () => {
                   type="text" 
                   value={rowNames[selectedRow] !== undefined ? rowNames[selectedRow] : `Row ${selectedRow}`} 
                   onChange={(e) => setRowNames(prev => ({ ...prev, [selectedRow]: e.target.value }))}
+                  onBlur={() => handleRowRenameBlur(selectedRow)}
                   className="row-rename-input"
                   disabled={rowLocks[selectedRow]}
                 />
@@ -831,7 +887,10 @@ const SeatManagement = () => {
                 >
                   {shiftOptions.map(opt => {
                     const optShifts = opt.id.split(',');
-                    const isAvailable = selectedSeat ? optShifts.every(shift => selectedSeat.shifts[shift] && selectedSeat.shifts[shift].status === 'available') : true;
+                    const isAvailable = selectedSeat ? optShifts.every(shift => {
+                      const s = selectedSeat.shifts && selectedSeat.shifts[shift];
+                      return !s || s.status === 'available';
+                    }) : true;
                     return (
                       <option key={opt.id} value={opt.id} disabled={!isAvailable}>
                         {opt.label} {!isAvailable ? '(Occupied)' : ''}
@@ -930,8 +989,8 @@ const SeatManagement = () => {
                   />
                   {showEditSearch && editFormData.name && (
                     <ul className="student-select-list student-dropdown-list">
-                      {seatDummyStudents
-                        .filter(s => s.name.toLowerCase().includes(editFormData.name.toLowerCase()) || String(s.vdlId).toLowerCase().includes(editFormData.name.toLowerCase()))
+                      {allStudents
+                        .filter(s => (s.name || '').toLowerCase().includes((editFormData.name || '').toLowerCase()) || String(s.vdlId || s.id || '').toLowerCase().includes((editFormData.name || '').toLowerCase()))
                         .map(student => (
                           <li key={student.id} onClick={() => {
                             setEditFormData({
@@ -953,6 +1012,16 @@ const SeatManagement = () => {
                       ))}
                     </ul>
                   )}
+                </div>
+                <div className="form-group">
+                  <label>Payment Mode</label>
+                  <select name="paymentMode" value={feeCollectionFormData.paymentMode || 'UPI'} onChange={handleFeeCollectionChange} required>
+                    <option value="UPI">UPI</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Credit/Debit Card">Credit/Debit Card</option>
+                    <option value="Net Banking">Net Banking</option>
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>Admission Date</label>
@@ -1022,19 +1091,26 @@ const SeatManagement = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {fullHistoryStudent.feeHistory && fullHistoryStudent.feeHistory.slice().reverse().map((entry, idx) => (
+                  {fullHistoryStudent.feeHistory && fullHistoryStudent.feeHistory.map((entry, idx) => (
                     <tr key={idx}>
                         <td>{entry.date ? formatDateTime(entry.date) : 'N/A'}</td>
                       <td>{entry.startDate ? formatDate(entry.startDate) : (fullHistoryStudent.fromDate ? formatDate(fullHistoryStudent.fromDate) : 'N/A')}</td>
                       <td>{entry.endDate ? formatDate(entry.endDate) : (fullHistoryStudent.toDate ? formatDate(fullHistoryStudent.toDate) : 'N/A')}</td>
                       <td className="td-amount-green">₹{entry.amount}</td>
                       <td className="td-amount-red">₹{entry.dueAmount || 0}</td>
-                      <td><span className={`status-badge ${entry.status === 'Paid' ? 'fully-booked' : 'pending'}`}>{entry.status}</span></td>
+                      <td><span className={`status-badge ${entry.status === 'Paid' ? 'fully-booked' : (entry.status === 'Partial' ? 'partially-booked' : 'pending')}`}>{entry.status}</span></td>
                       <td>{entry.collectedBy || 'Admin'}</td>
                       <td>{entry.description || '-'}</td>
                       <td>
-                        {(entry.dueAmount > 0 || entry.status === 'Pending') && (
-                          <button className="btn-primary-action btn-pay-due" onClick={() => openPayDueModal(entry)}>Pay Due</button>
+                        {entry.status !== 'Paid' && entry.dueAmount > 0 && (
+                          <button 
+                            className="btn-primary-action btn-pay-due" 
+                            style={{ opacity: idx !== 0 ? 0.5 : 1, cursor: idx !== 0 ? 'not-allowed' : 'pointer' }}
+                            onClick={() => idx === 0 ? openPayDueModal(entry) : null}
+                            disabled={idx !== 0}
+                          >
+                            Pay Due
+                          </button>
                         )}
                       </td>
                     </tr>

@@ -13,6 +13,7 @@ import ShiftManagement from './features/shift/ShiftManagement';
 import IdentityCard from './features/student/identityCard'; // Import the IdentityCard component
 import Settings from './features/seats/Settings';
 import VdlFlow from './features/shift/VdlFlow';
+import Search from './features/student/Search';
 import { getCurrentUser } from './utils/rbac';
 import LogsViewer from './components/LogsViewer'; // Import LogsViewer
 import './App.css';
@@ -44,6 +45,7 @@ function App() {
           <Route path="identityCards" element={<IdentityCard />} /> {/* For Admin/Internal */}
           <Route path="student/identityCards" element={<IdentityCard />} /> {/* For Students */}
           <Route path="settings" element={<Settings />} />
+          <Route path="search" element={<Search />} />
         </Route>
       </Routes>
     </Router>

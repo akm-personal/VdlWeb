@@ -19,6 +19,8 @@ export const authService = {
   logout: () => {
     // On client-side, logout typically involves clearing local storage.
     // If a backend logout endpoint is needed for token invalidation, it can be added here.
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
     localStorage.removeItem('jwt_token');
     localStorage.removeItem('user_info');
     logApiCall('info', 'User logged out', { action: 'logout' });

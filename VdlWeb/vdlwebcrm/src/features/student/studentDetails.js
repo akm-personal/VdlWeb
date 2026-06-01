@@ -6,11 +6,12 @@ import '../../styles/Student.css';
 import '../../styles/SeatManagement.css';
 import IdentityCard from './identityCard';
 import SeatSelectionModal from '../../components/SeatSelectionModal';
-import { updateStudent } from '../../services/apis';
+import { updateStudent, apiClient } from '../../services/apis';
+import { useActiveShifts } from '../../hooks/useShifts';
 
 const StudentDetails = () => {
   const currentUser = getCurrentUser();
-  const isStudent = currentUser?.roleId === 4;
+  const isStudent = Number(currentUser?.roleId) === 4;
   const navigate = useNavigate(); // Initialize useNavigate hook
   const [vdlId, setVdlId] = useState('');
   const [isProfileComplete, setIsProfileComplete] = useState(false);
@@ -18,6 +19,7 @@ const StudentDetails = () => {
   const [prefilledFields, setPrefilledFields] = useState({ email: false, mobile: false });
   const [isSelfieModalOpen, setIsSelfieModalOpen] = useState(false);
   const [selfieImage, setSelfieImage] = useState(null);
+  const [registrationResult, setRegistrationResult] = useState(null);
   
   // Camera specific states & refs
   const videoRef = useRef(null);
@@ -25,10 +27,7 @@ const StudentDetails = () => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
 
-  // Dummy data for shifts (replace with API call)
-  const dummyShifts = [{ id: 1, name: 'Morning', status: 'active' }, { id: 2, name: 'Afternoon', status: 'active' }];
-  const activeShifts = dummyShifts.filter(s => s.status === 'active');
-  const defaultShiftId = activeShifts.length > 0 ? String(activeShifts[0].id) : '1'; // Default to '1' if no active shifts
+  const { activeShifts, formatTime } = useActiveShifts();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -41,7 +40,7 @@ const StudentDetails = () => {
     alternateNumber: '',
     studentClass: '',
     idProof: '',
-    shiftType: defaultShiftId,
+    shiftType: '',
     seatNumber: '',
     studentStatus: 'Active'
   });
@@ -55,40 +54,97 @@ const StudentDetails = () => {
   };
 
   useEffect(() => {
-    // If the logged in user is a student, fetch their profile info & pre-fill the form
-    if (isStudent && currentUser?.id) {
-      // In a real app, you'd fetch student details from an API using currentUser.id
-      // For now, we'll simulate pre-filling from currentUser info
-      const studentInfoFromAuth = currentUser; // Assuming currentUser has email, mobile, username
-      // const studentInfo = dummyUsers.find(u => u.id === currentUser.id); // Removed dummyUsers reference
-      if (studentInfoFromAuth) {
-        setVdlId(studentInfoFromAuth.username); // Assuming VDL ID is the username for now
-        setPrefilledFields({
-          email: !!studentInfoFromAuth.email,
-          mobile: !!studentInfoFromAuth.mobileNumber // Assuming mobileNumber from API
-        });
-        
-        const savedProfile = localStorage.getItem(`vdl_profile_${currentUser.id}`);
-        if (savedProfile) {
-          const parsedData = JSON.parse(savedProfile);
-          setFormData(parsedData);
-          setSelfieImage(parsedData.selfieImage || null);
-          setIsProfileComplete(true);
-          setSelfieImage(parsedData.selfieImage || null); // Keep existing selfie if any
-          // Check if key fields are filled to determine profile completeness
-          setIsProfileComplete(!!parsedData.name && !!parsedData.fatherName && !!parsedData.dateOfBirth && !!parsedData.address);
-        } else {
-          setFormData(prev => ({
-            ...prev,
-            // name: studentInfo.username || currentUser?.name || '', // Removed dummyUsers reference
-            name: studentInfoFromAuth.username || '',
-            email: studentInfoFromAuth.email || '',
-            mobileNumber: studentInfoFromAuth.mobileNumber || ''
-          }));
+    const fetchProfile = async () => {
+      if (!isStudent || !currentUser) return;
+      
+      let studentVdlId = currentUser?.vdlId || currentUser?.username || '';
+      const token = localStorage.getItem('authToken') || localStorage.getItem('token') || localStorage.getItem('jwt_token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const nameClaim = payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || payload.vdlId;
+          if (nameClaim && String(nameClaim).toUpperCase().startsWith("VDL")) {
+            studentVdlId = nameClaim; 
+          }
+        } catch (err) {
+          console.error('Error parsing token:', err);
         }
       }
+      
+      setVdlId(studentVdlId);
+
+      if (studentVdlId) {
+        try {
+          // Fetch actual details from database
+          const data = await apiClient(`/Student/details/${studentVdlId}`);
+          if (data && data.vdlId !== 'Fake') {
+            let matchedShiftId = '';
+            if (data.shiftType && activeShifts.length > 0) {
+              const foundShift = activeShifts.find(s => s.name.toLowerCase() === data.shiftType.toLowerCase());
+              if (foundShift) {
+                matchedShiftId = String(foundShift.id);
+              } else {
+                matchedShiftId = data.shiftType;
+              }
+            }
+
+            setFormData(prev => ({
+              ...prev,
+              name: data.name && data.name !== 'Fake' ? data.name : (currentUser.name || currentUser.username || ''),
+              email: data.email && data.email !== 'Fake' ? data.email : (currentUser.email || ''),
+              fatherName: data.fatherName && data.fatherName !== 'Fake' ? data.fatherName : '',
+              dateOfBirth: data.dateOfBirth && data.dateOfBirth !== 'Fake' ? data.dateOfBirth.split('T')[0] : '',
+              gender: data.gender && data.gender !== 'Fake' ? (data.gender.charAt(0).toUpperCase() + data.gender.slice(1)) : 'Male',
+              address: data.address && data.address !== 'Fake' ? data.address : '',
+              mobileNumber: data.mobileNumber && data.mobileNumber !== 'Fake' ? data.mobileNumber : (currentUser.mobileNumber || ''),
+              alternateNumber: data.alternateNumber && data.alternateNumber !== 'Fake' ? data.alternateNumber : '',
+              studentClass: (data.class || data.studentClass) && data.class !== 'Fake' ? (data.class || data.studentClass) : '',
+              idProof: data.idProof && data.idProof !== 'Fake' ? data.idProof : '',
+              shiftType: data.shiftType && data.shiftType !== 'Fake' ? matchedShiftId : '',
+              seatNumber: data.seatNumber && data.seatNumber !== 'Fake' ? data.seatNumber : '',
+              studentStatus: data.studentStatus && data.studentStatus !== 'Fake' ? data.studentStatus : 'Active'
+            }));
+
+            setPrefilledFields({
+              email: !!data.email && data.email !== 'Fake',
+              mobile: !!data.mobileNumber && data.mobileNumber !== 'Fake'
+            });
+
+            const isComplete = !!data.name && data.name !== 'Fake' && 
+                               !!data.fatherName && data.fatherName !== 'Fake' && 
+                               !!data.dateOfBirth && data.dateOfBirth !== 'Fake' && 
+                               !!data.address && data.address !== 'Fake';
+            setIsProfileComplete(isComplete);
+            
+            const savedProfile = localStorage.getItem(`vdl_profile_${currentUser.id}`);
+            if (savedProfile) {
+              const parsedData = JSON.parse(savedProfile);
+              if (parsedData.selfieImage) {
+                setSelfieImage(parsedData.selfieImage);
+              }
+            }
+            
+            return;
+          }
+        } catch (err) {
+          console.error('Error fetching student details from API:', err);
+        }
+      }
+
+      // Fallback if no database profile exists yet
+      setFormData(prev => ({
+        ...prev,
+        name: currentUser.name || currentUser.username || '',
+        email: currentUser.email || '',
+        mobileNumber: currentUser.mobileNumber || ''
+      }));
+    };
+
+    if (activeShifts.length > 0) {
+      fetchProfile();
     }
-  }, [isStudent, currentUser?.id, currentUser?.name]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStudent, currentUser?.id, currentUser?.vdlId, activeShifts.length]);
 
   const handleSeatSelect = (seatNumber) => {
     setFormData(prev => ({ ...prev, seatNumber }));
@@ -111,47 +167,130 @@ const StudentDetails = () => {
       studentStatus: isStudent ? 'Active' : formData.studentStatus
     };
 
-    // Prepare data for API (same format as AllStudent.js)
-    const studentData = {
-      vdlId: vdlId || currentUser?.username,
-      name: finalFormData.name,
-      email: finalFormData.email,
-      fatherName: finalFormData.fatherName,
-      gender: finalFormData.gender ? finalFormData.gender.toLowerCase() : 'male',
-      seatNumber: parseInt(finalFormData.seatNumber) || 0,
-      shiftType: finalFormData.shiftType,
-      address: finalFormData.address,
-      alternateNumber: finalFormData.alternateNumber,
-      class: finalFormData.studentClass,
-      dateOfBirth: finalFormData.dateOfBirth ? new Date(finalFormData.dateOfBirth).toISOString() : null,
-      idProof: finalFormData.idProof,
-      mobileNumber: finalFormData.mobileNumber,
-      studentStatus: finalFormData.studentStatus
-    };
+    let studentVdlId = vdlId || currentUser?.vdlId || currentUser?.username;
+
+    // Extract real VDL ID from the JWT token to prevent 401 Unauthorized mismatch
+    const token = localStorage.getItem('authToken') || localStorage.getItem('token') || localStorage.getItem('jwt_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const nameClaim = payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || payload.vdlId;
+        // .NET assigns the VDL ID to the 'name' claim. Use it to ensure exact match.
+        if (nameClaim && String(nameClaim).toUpperCase().startsWith("VDL")) {
+          studentVdlId = nameClaim; 
+        }
+      } catch (err) {
+        console.error('Error parsing token:', err);
+      }
+    }
+
+    if (isStudent && !studentVdlId) {
+      alert('Unable to update profile: VDL ID not found.');
+      return;
+    }
+
+    const shiftName = activeShifts.find(s => String(s.id) === finalFormData.shiftType)?.name || finalFormData.shiftType;
 
     try {
-      // Use API call to update student details
-      const updatedStudent = await updateStudent(vdlId || currentUser?.username, studentData);
-      
-      // Share booking state with SeatManagement module via localStorage
-      if (finalFormData.seatNumber && finalFormData.shiftType) {
-        const shiftId = getShiftId();
-        const stored = localStorage.getItem('vdl_seats');
-        if (stored) {
-          const seats = JSON.parse(stored);
-          const updatedSeats = seats.map(s => {
-            if (s.number === Number(finalFormData.seatNumber)) {
-              return {
-                ...s,
-                shifts: {
-                  ...s.shifts,
-                  [shiftId]: {
-                    status: 'booked',
-                    student: {
-                      id: currentUser?.id || Date.now(),
-                      vdlId: currentUser?.username || 'VDL_NEW',
-                      name: finalFormData.name,
-                      feeStatus: 'Pending',
+      if (isStudent) {
+        // Prepare data for API (same format as AllStudent.js)
+        const studentData = {
+          vdlId: studentVdlId,
+          name: finalFormData.name,
+          email: finalFormData.email,
+          fatherName: finalFormData.fatherName,
+          gender: finalFormData.gender ? finalFormData.gender.toLowerCase() : 'male',
+          seatNumber: parseInt(finalFormData.seatNumber) || 0,
+          shiftType: shiftName,
+          address: finalFormData.address,
+          alternateNumber: finalFormData.alternateNumber,
+          class: finalFormData.studentClass,
+          dateOfBirth: finalFormData.dateOfBirth ? new Date(finalFormData.dateOfBirth).toISOString() : null,
+          idProof: finalFormData.idProof,
+          mobileNumber: finalFormData.mobileNumber,
+          studentStatus: finalFormData.studentStatus
+        };
+
+        // Use API call to update student details
+        const updatedStudent = await updateStudent(studentVdlId, studentData);
+        
+        // Share booking state with SeatManagement module via localStorage
+        if (finalFormData.seatNumber && finalFormData.shiftType) {
+          const shiftId = getShiftId();
+          const stored = localStorage.getItem('vdl_seats');
+          if (stored) {
+            const seats = JSON.parse(stored);
+            const updatedSeats = seats.map(s => {
+              if (s.number === Number(finalFormData.seatNumber)) {
+                return {
+                  ...s,
+                  shifts: {
+                    ...s.shifts,
+                    [shiftId]: {
+                      status: 'booked',
+                      student: {
+                        id: currentUser?.id || Date.now(),
+                        vdlId: studentVdlId,
+                        name: finalFormData.name,
+                        feeStatus: 'Pending',
+                      }
+                    }
+                  }
+                }
+              };
+              return s;
+            });
+            localStorage.setItem('vdl_seats', JSON.stringify(updatedSeats));
+          }
+        }
+
+        // Set profile complete based on API response or form data
+        setIsProfileComplete(!!finalFormData.name && !!finalFormData.fatherName && !!finalFormData.dateOfBirth && !!finalFormData.address);
+        window.dispatchEvent(new Event('profileUpdated')); // Notify other components
+        alert('Profile updated successfully!');
+        setIsSelfieModalOpen(true); // Open selfie popup after submission
+      } else {
+        // Admin or Internal user adding a new student
+        const apiPayload = {
+          name: finalFormData.name,
+          email: finalFormData.email,
+          fatherName: finalFormData.fatherName,
+          gender: finalFormData.gender ? finalFormData.gender.toLowerCase() : 'male',
+          seatNumber: finalFormData.seatNumber ? parseInt(finalFormData.seatNumber, 10) : 0,
+          shiftType: shiftName,
+          address: finalFormData.address,
+          alternateNumber: finalFormData.alternateNumber,
+          class: finalFormData.studentClass,
+          dateOfBirth: finalFormData.dateOfBirth ? new Date(finalFormData.dateOfBirth).toISOString() : null,
+          idProof: finalFormData.idProof,
+          mobileNumber: finalFormData.mobileNumber,
+          studentStatus: finalFormData.studentStatus
+        };
+
+        const data = await apiClient('/Student/register', {
+          method: 'POST',
+          body: JSON.stringify(apiPayload)
+        });
+
+        // Share booking state with SeatManagement module via localStorage
+        if (finalFormData.seatNumber && finalFormData.shiftType) {
+          const shiftId = getShiftId();
+          const stored = localStorage.getItem('vdl_seats');
+          if (stored) {
+            const seats = JSON.parse(stored);
+            const updatedSeats = seats.map(s => {
+              if (s.number === Number(finalFormData.seatNumber)) {
+                return {
+                  ...s,
+                  shifts: {
+                    ...s.shifts,
+                    [shiftId]: {
+                      status: 'booked',
+                      student: {
+                        id: data.studentId || Date.now(),
+                        vdlId: data.vdlId || 'VDL_NEW',
+                        name: finalFormData.name,
+                        feeStatus: 'Pending',
                     }
                   }
                 }
@@ -163,19 +302,18 @@ const StudentDetails = () => {
         }
       }
 
-      if (isStudent) {
-        // Update local storage for student profile
-        localStorage.setItem(`vdl_profile_${currentUser.id}`, JSON.stringify(finalFormData));
-        setIsProfileComplete(true);
-        window.dispatchEvent(new Event('profileUpdated')); // Notify other components
-        alert('Profile updated successfully!');
-        setIsSelfieModalOpen(true); // Open selfie popup after submission
-      } else {
-        alert("Student Details Added Successfully!");
+        setRegistrationResult(data);
+        
+        // Clear form after successful submission
+        setFormData({
+          name: '', email: '', fatherName: '', dateOfBirth: '', gender: 'Male', address: '',
+          mobileNumber: '', alternateNumber: '', studentClass: '', idProof: '',
+          shiftType: '', seatNumber: '', studentStatus: 'Active'
+        });
       }
     } catch (error) {
-      console.error('Error updating student:', error);
-      alert('Failed to update student details: ' + error.message);
+      console.error('Error saving student details:', error);
+      alert('Failed to save student details: ' + error.message);
     }
   };
 
@@ -300,7 +438,15 @@ const StudentDetails = () => {
           </div>
           <div className="form-group">
             <label>Date of Birth</label>
-            <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} required disabled={disableForm} />
+            <input 
+              type="date" 
+              name="dateOfBirth" 
+              value={formData.dateOfBirth} 
+              onChange={handleChange} 
+              required 
+              disabled={disableForm} 
+              className="custom-date-input"
+            />
           </div>
           <div className="form-group">
             <label>Gender</label>
@@ -340,13 +486,24 @@ const StudentDetails = () => {
           <div className="form-group">
             <label>Shift Type</label>
             <select name="shiftType" value={formData.shiftType} onChange={handleChange} disabled={disableForm}>
-              {activeShifts.map(shift => (
-                <option key={shift.id} value={String(shift.id)}>{shift.name}</option>
-              ))}
-              {['Morning', 'Afternoon', 'Evening'].includes(formData.shiftType) && (
-                <option value={formData.shiftType}>{formData.shiftType}</option>
+              <option value="">Select Shift</option>
+              {activeShifts.map(shift => {
+                const isMatchedShift = formData.shiftType === String(shift.id);
+                return (
+                <option 
+                  key={shift.id} 
+                  value={String(shift.id)}
+                  style={{ fontWeight: isMatchedShift ? 'bold' : 'normal' }}
+                >
+                  <b>{shift.name} ({formatTime(shift.start)} - {formatTime(shift.end)})</b>
+                </option>
+                );
+              })}
+              {['Morning', 'Afternoon', 'Evening'].includes(formData.shiftType) && !activeShifts.some(s => String(s.id) === formData.shiftType) && (
+                <option value={formData.shiftType} style={{ fontWeight: 'bold' }}>{formData.shiftType}</option>
               )}
             </select>
+             
           </div>
           <div className="form-group">
             <label>Seat Number</label>
@@ -402,6 +559,28 @@ const StudentDetails = () => {
         shiftType={formData.shiftType}
         activeShifts={activeShifts}
       />
+
+      {/* Success Result Modal (Credentials Viewer) */}
+      {registrationResult && !isStudent && (
+        <div className="modal-overlay" style={{ zIndex: 1300, backdropFilter: 'blur(8px)', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div className="modal-content" style={{ maxWidth: '500px', textAlign: 'center', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="modal-header">
+              <h3 style={{ color: '#27ae60', margin: 0 }}>🎉 Registration Successful!</h3>
+              <button className="btn-close-icon" type="button" onClick={() => setRegistrationResult(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '15px' }}>{registrationResult.message || 'Student added successfully.'}</p>
+              <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', textAlign: 'left', border: '1px solid #e1e8ed' }}>
+                <p style={{ margin: '5px 0' }}><strong>Name:</strong> {registrationResult.name}</p>
+                <p style={{ margin: '5px 0' }}><strong>VDL ID:</strong> {registrationResult.vdlId}</p>
+                <p style={{ margin: '5px 0' }}><strong>Username:</strong> {registrationResult.username}</p>
+                <p style={{ margin: '5px 0', fontSize: '16px' }}><strong>Temp Password:</strong> <span style={{ color: '#e74c3c', fontWeight: 'bold' }}>{registrationResult.tempPassword}</span></p>
+              </div>
+              <button type="button" onClick={() => setRegistrationResult(null)} className="btn-primary-action" style={{ marginTop: '20px', width: 'auto', padding: '10px 30px' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Selfie Popup Modal */}
       {isSelfieModalOpen && (

@@ -24,6 +24,8 @@ function Login() {
         username: emailOrUserId, // Use emailOrUserId as the username for the API call
         password,
       });
+      localStorage.setItem('authToken', user.token);
+      localStorage.setItem('token', user.token);
       localStorage.setItem('jwt_token', user.token);
       localStorage.setItem('user_info', JSON.stringify(user.user));
        // localStorage.setItem('user', JSON.stringify(response.data));

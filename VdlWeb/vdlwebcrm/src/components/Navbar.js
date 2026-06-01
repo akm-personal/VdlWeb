@@ -18,7 +18,7 @@ const Navbar = ({ title, toggleSidebar }) => {
     if (!user) return;
 
     const getExpTime = () => {
-      const token = localStorage.getItem('token') || localStorage.getItem('jwt_token');
+      const token = localStorage.getItem('authToken') || localStorage.getItem('token') || localStorage.getItem('jwt_token');
       if (!token) return 0;
       try {
         // Safely decode JWT payload to get 'exp'
