@@ -66,7 +66,9 @@ const AllStudent = () => {
       try {
         const data = await apiClient('/Student/list');
         if (!isMounted) return;
-        const mappedData = data.map(student => ({
+        const mappedData = data
+          .filter(student => Number(student.roleId || 4) === 4)
+          .map(student => ({
             id: student.id || 'Fake',
             vdlId: student.vdlId || 'Fake',
             name: student.name || 'Fake',

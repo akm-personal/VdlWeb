@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { dummyUsers } from '../../utils/dummyDatabase';
+import React, { useState, useEffect } from 'react';
+import { apiClient } from '../../services/apis';
 import '../../styles/Users.css';
 import Pagination from '../../components/Pagination';
+import Loader from '../../components/Loader';
 
 const Users = () => {
   const [viewMode, setViewMode] = useState('form'); // 'form' or 'table'
@@ -13,7 +14,8 @@ const Users = () => {
     roleId: '4' // default to student
   });
 
-  const [users] = useState(dummyUsers);
+  const [users, setUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isPwdOpen, setIsPwdOpen] = useState(false);
@@ -24,6 +26,41 @@ const Users = () => {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUsers = async (retryCount = 3) => {
+      setIsLoading(true);
+      try {
+        const data = await apiClient('/Student/list');
+        if (!isMounted) return;
+        const mappedData = data
+          .filter(user => Number(user.roleId || 4) !== 4) // Exclude students
+          .map(user => ({
+            id: user.id || 'Fake',
+            vdlId: user.vdlId || 'Fake',
+            username: user.name || user.username || 'Fake',
+            email: user.email || 'Fake',
+            roleId: user.roleId || 1,
+            role: user.roleName || 'Admin',
+            status: user.studentStatus === '6' ? 'Active' : 'Inactive'
+          }));
+        setUsers(mappedData);
+        setIsLoading(false);
+      } catch (error) {
+        if (!isMounted) return;
+        if (retryCount > 0) {
+          console.log(`Retrying fetch users due to failure... (${retryCount} retries left)`);
+          setTimeout(() => fetchUsers(retryCount - 1), 2000); // Wait 2 seconds before retry
+        } else {
+          console.error('Error fetching users:', error);
+          setIsLoading(false);
+        }
+      }
+    };
+    fetchUsers();
+    return () => { isMounted = false; };
+  }, []);
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
@@ -143,17 +180,23 @@ const Users = () => {
                 </tr>
               </thead>
               <tbody>
-                {currentUsers.map(user => (
-                  <tr key={user.id}>
-                    <td>{user.id}</td>
-                    <td>{user.vdlId}</td>
-                    <td>{user.email}</td>
-                    <td>{user.role}</td>
-                    <td>
-                      <button className="btn-view" onClick={() => openDetails(user)}>View</button>
-                    </td>
-                  </tr>
-                ))}
+                {isLoading ? (
+                  <tr><td colSpan="5" style={{ padding: 0 }}><Loader message="Fetching users data..." /></td></tr>
+                ) : currentUsers.length > 0 ? (
+                  currentUsers.map(user => (
+                    <tr key={user.id}>
+                      <td>{user.id}</td>
+                      <td>{user.vdlId}</td>
+                      <td>{user.email}</td>
+                      <td>{user.role}</td>
+                      <td>
+                        <button className="btn-view" onClick={() => openDetails(user)}>View</button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan="5" style={{ textAlign: 'center' }}>No users found.</td></tr>
+                )}
               </tbody>
             </table>
             

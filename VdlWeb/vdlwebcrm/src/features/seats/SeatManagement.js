@@ -49,6 +49,7 @@ const SeatManagement = () => {
   const [rowNames, setRowNames] = useState({});
   const [layoutRows, setLayoutRows] = useState([]);
   const [filter, setFilter] = useState('All');
+  const [isLoading, setIsLoading] = useState(true);
 
   const { activeShifts } = useActiveShifts();
   const shiftOptions = generateShiftCombinations(activeShifts);
@@ -89,8 +90,9 @@ const SeatManagement = () => {
     fetchLayoutData();
   }, []);
 
-  const fetchLayoutData = async () => {
+  const fetchLayoutData = async (retryCount = 3) => {
     try {
+      setIsLoading(true);
       const data = await getLayout();
       let fetchedSeats = [];
       let fetchedRows = [];
@@ -162,8 +164,15 @@ const SeatManagement = () => {
       } else {
         setLayoutRows([]); // Fallback to empty if DB has no layout
       }
+      setIsLoading(false);
     } catch (err) {
-      console.error("Failed to fetch layout data:", err);
+      if (retryCount > 0) {
+        console.log(`Retrying fetch layout data... (${retryCount} retries left)`);
+        setTimeout(() => fetchLayoutData(retryCount - 1), 1500);
+      } else {
+        console.error("Failed to fetch layout data:", err);
+        setIsLoading(false);
+      }
     }
   };
 
@@ -218,13 +227,20 @@ const SeatManagement = () => {
     }
   };
 
-  const handleAddRow = async () => {
+  const handleAddRow = async (e) => {
+    if (e && e.preventDefault) e.preventDefault(); // Blocks accidental page reload/logout
     try {
       const newOrder = layoutRows.length > 0 ? Math.max(...layoutRows) + 1 : 1;
       await createRow({ rowOrder: newOrder, rowName: `Row ${newOrder}`, name: `Row ${newOrder}` });
+      await apiClient('/SeatManagement/rows/create', {
+        method: 'POST',
+        body: JSON.stringify({ rowName: `Row ${newOrder}` })
+      });
       await fetchLayoutData();
     } catch (err) {
-      alert("Error adding row: " + err.message);
+      if (err.message !== 'Unauthorized session.') {
+        alert("Error adding row: " + err.message);
+      }
     }
   };
 
@@ -533,6 +549,8 @@ const SeatManagement = () => {
     return list;
   };
 
+  const isFeePending = !!feeCollectionFormData.feeRecordId;
+
   return (
     <div className="seat-page">
       {/* Header Actions */}
@@ -611,6 +629,10 @@ const SeatManagement = () => {
         {/* LEFT PANEL - 70% */}
         <div className="left-panel" style={isStudent ? { flex: '0 0 100%', maxWidth: '100%' } : {}}>
           <div className="seat-grid-container table-responsive">
+            {isLoading && rows.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#7f8c8d' }}>Loading layout data...</div>
+            ) : (
+              <>
             {rows.map(rowNum => {
               const rowSeats = seats.filter(s => s.row === rowNum).sort((a,b) => a.number - b.number);
               return (
@@ -707,12 +729,15 @@ const SeatManagement = () => {
             })}
             {!isStudent && (
               <button 
+                type="button"
                 className="btn-action add-row-btn" 
                 onClick={handleAddRow}
                 disabled={!canAddRow}
                 title={!canAddRow ? 'No permission to add layout' : ''}
                 style={{ opacity: canAddRow ? 1 : 0.5, cursor: canAddRow ? 'pointer' : 'not-allowed' }}
               >+ Add New Row</button>
+            )}
+              </>
             )}
           </div>
         </div>
@@ -1130,7 +1155,7 @@ const SeatManagement = () => {
         <div className="modal-overlay modal-overlay-top">
           <div className="modal-content modal-content-medium">
             <div className="modal-header">
-              <h3>Fee Collection</h3>
+              <h3>{isFeePending ? 'Pay Due Amount' : 'Collect New Fee'}</h3>
               <button className="btn-close-icon" onClick={() => setIsFeeCollectionModalOpen(false)}>&times;</button>
             </div>
             <div className="modal-body">
@@ -1141,15 +1166,23 @@ const SeatManagement = () => {
                 </div>
                 <div className="form-group">
                   <label>Start Date</label>
-                  <input type="date" name="startDate" value={feeCollectionFormData.startDate} onChange={handleFeeCollectionChange} required />
+                  <input type="date" name="startDate" value={feeCollectionFormData.startDate} onChange={handleFeeCollectionChange} required disabled={isFeePending} style={{ backgroundColor: isFeePending ? '#eee' : 'white' }} />
+                </div>
+                <div className="form-group">
+                  <label>Duration</label>
+                  <select name="duration" value={feeCollectionFormData.duration} onChange={handleFeeCollectionChange} disabled={!feeCollectionFormData.startDate || isFeePending} style={{ cursor: (feeCollectionFormData.startDate && !isFeePending) ? 'pointer' : 'not-allowed', backgroundColor: isFeePending ? '#eee' : 'white' }}>
+                    {[...Array(12)].map((_, i) => (
+                      <option key={i+1} value={i+1}>{i+1} Month{i > 0 ? 's' : ''}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>End Date</label>
-                  <input type="date" name="endDate" value={feeCollectionFormData.endDate} onChange={handleFeeCollectionChange} required />
+                  <input type="date" name="endDate" value={feeCollectionFormData.endDate} onChange={handleFeeCollectionChange} required readOnly disabled={isFeePending} style={{ backgroundColor: '#eee' }} />
                 </div>
                 <div className="form-group">
                   <label>Total Fee (₹)</label>
-                  <input type="number" name="totalFee" value={feeCollectionFormData.totalFee} onChange={handleFeeCollectionChange} required />
+                  <input type="number" name="totalFee" value={feeCollectionFormData.totalFee} onChange={handleFeeCollectionChange} required disabled={isFeePending} style={{ backgroundColor: isFeePending ? '#eee' : 'white' }} />
                 </div>
                 <div className="form-group">
                   <label>Collected Fee (₹)</label>
